@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { playerAPI } from '../services/api';
 
 function TopPerformers() {
-  const [allPlayers, setAllPlayers] = useState([]);
   const [batsmen, setBatsmen] = useState([]);
   const [bowlers, setBowlers] = useState([]);
   const [allRounders, setAllRounders] = useState([]);

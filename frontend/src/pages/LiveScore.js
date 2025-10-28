@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { matchAPI, playerAPI, teamAPI } from '../services/api';
+import { matchAPI, playerAPI } from '../services/api';
 import io from 'socket.io-client';
 
 const socket = io('http://localhost:5022');
@@ -14,10 +14,7 @@ function LiveScore() {
   // Score input states
   const [currentBatsman, setCurrentBatsman] = useState('');
   const [currentBowler, setCurrentBowler] = useState('');
-  const [boundaryType, setBoundaryType] = useState('none');
   const [additionalRuns, setAdditionalRuns] = useState(0);
-  const [extraType, setExtraType] = useState('none');
-  const [isWicket, setIsWicket] = useState(false);
   const [wicketType, setWicketType] = useState('none');
   const [dismissedPlayer, setDismissedPlayer] = useState('');
 
@@ -34,6 +31,17 @@ function LiveScore() {
     tossDecision: 'bat'
   });
 
+  const fetchMatch = useCallback(async () => {
+    try {
+      const response = await matchAPI.getById(id);
+      setMatch(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching match:', error);
+      setLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     fetchMatch();
     fetchPlayers();
@@ -47,18 +55,7 @@ function LiveScore() {
     return () => {
       socket.off('matchUpdate');
     };
-  }, [id]);
-
-  const fetchMatch = async () => {
-    try {
-      const response = await matchAPI.getById(id);
-      setMatch(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching match:', error);
-      setLoading(false);
-    }
-  };
+  }, [id, fetchMatch]);
 
   const fetchPlayers = async () => {
     try {
@@ -191,6 +188,9 @@ function LiveScore() {
         ballData.wicketType = wicketType || 'bowled';
         ballData.dismissedPlayer = dismissedPlayer || currentBatsman;
         break;
+      default:
+        // Unknown score type, do nothing
+        break;
     }
 
     try {
@@ -226,10 +226,7 @@ function LiveScore() {
       }
 
       // Reset form
-      setBoundaryType('none');
       setAdditionalRuns(0);
-      setExtraType('none');
-      setIsWicket(false);
       setWicketType('none');
       setDismissedPlayer('');
 
