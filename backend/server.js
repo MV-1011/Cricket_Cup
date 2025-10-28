@@ -48,6 +48,21 @@ app.get('/', (req, res) => {
   res.json({ message: 'Cricket Tournament Management API' });
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  const mongoose = require('mongoose');
+  const isMongoConnected = mongoose.connection.readyState === 1;
+
+  res.json({
+    status: 'running',
+    mongodb: isMongoConnected ? 'connected' : 'disconnected',
+    message: isMongoConnected
+      ? '✅ All systems operational'
+      : '⚠️ MongoDB not connected. Please set MONGODB_URI environment variable.',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Socket.io connection
 io.on('connection', (socket) => {
   console.log('New client connected');
