@@ -1,0 +1,26 @@
+{
+  "name": "cricket-cup",
+  "version": "1.0.0",
+  "description": "Cricket Tournament Management System",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev",
+    "install-all": "cd backend && npm install && cd ../frontend && npm install",
+    "build": "cd frontend && npm run build"
+  },
+  "keywords": [
+    "cricket",
+    "tournament",
+    "management",
+    "react",
+    "nodejs",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  }
+}
