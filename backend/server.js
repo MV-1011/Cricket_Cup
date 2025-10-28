@@ -4,6 +4,7 @@ const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
 const http = require('http');
 const socketIo = require('socket.io');
+const path = require('path');
 const connectDB = require('./config/db');
 
 // Load environment variables
@@ -17,7 +18,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "http://localhost:3003",
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
@@ -43,11 +44,6 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/matches', matchRoutes);
 
-// Root route
-app.get('/', (req, res) => {
-  res.json({ message: 'Cricket Tournament Management API' });
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
   const mongoose = require('mongoose');
@@ -61,6 +57,14 @@ app.get('/health', (req, res) => {
       : '⚠️ MongoDB not connected. Please set MONGODB_URI environment variable.',
     timestamp: new Date().toISOString()
   });
+});
+
+// Serve static files from the React frontend app
+app.use(express.static(path.join(__dirname, '../frontend/build')));
+
+// Anything that doesn't match the above, send back index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
 // Socket.io connection

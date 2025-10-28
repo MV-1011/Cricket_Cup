@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { matchAPI, teamAPI } from '../services/api';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:5022');
+const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
+const socket = io(SOCKET_URL);
 
 function Dashboard() {
   const [liveMatches, setLiveMatches] = useState([]);
