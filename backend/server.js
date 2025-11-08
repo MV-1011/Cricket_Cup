@@ -65,8 +65,13 @@ app.get('/health', (req, res) => {
 // Serve static files from the React frontend app
 app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Anything that doesn't match the above, send back index.html
+// Anything that doesn't match API routes or static files, send back index.html
+// This allows client-side routing to work
 app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ message: 'API endpoint not found' });
+  }
   res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });
 
