@@ -1,9 +1,10 @@
-const mongoose = require('mongoose');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import Team from './models/Team.js';
+import Player from './models/Player.js';
+import Match from './models/Match.js';
 
-const Team = require('./models/Team');
-const Player = require('./models/Player');
-const Match = require('./models/Match');
+dotenv.config();
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)

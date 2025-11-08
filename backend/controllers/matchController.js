@@ -1,9 +1,9 @@
-const Match = require('../models/Match');
-const Team = require('../models/Team');
-const Player = require('../models/Player');
+import Match from '../models/Match.js';
+import Team from '../models/Team.js';
+import Player from '../models/Player.js';
 
 // Get all matches
-exports.getAllMatches = async (req, res) => {
+export const getAllMatches = async (req, res) => {
   try {
     const matches = await Match.find()
       .populate('team1', 'name shortName')
@@ -17,7 +17,7 @@ exports.getAllMatches = async (req, res) => {
 };
 
 // Get match by ID
-exports.getMatchById = async (req, res) => {
+export const getMatchById = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
       .populate('team1', 'name shortName')
@@ -38,7 +38,7 @@ exports.getMatchById = async (req, res) => {
 };
 
 // Create match
-exports.createMatch = async (req, res) => {
+export const createMatch = async (req, res) => {
   try {
     const match = new Match(req.body);
     const newMatch = await match.save();
@@ -49,7 +49,7 @@ exports.createMatch = async (req, res) => {
 };
 
 // Update match
-exports.updateMatch = async (req, res) => {
+export const updateMatch = async (req, res) => {
   try {
     const match = await Match.findByIdAndUpdate(
       req.params.id,
@@ -67,7 +67,7 @@ exports.updateMatch = async (req, res) => {
 };
 
 // Delete match
-exports.deleteMatch = async (req, res) => {
+export const deleteMatch = async (req, res) => {
   try {
     const match = await Match.findByIdAndDelete(req.params.id);
     if (!match) {
@@ -80,7 +80,7 @@ exports.deleteMatch = async (req, res) => {
 };
 
 // Start match
-exports.startMatch = async (req, res) => {
+export const startMatch = async (req, res) => {
   try {
     const { tossWinner, tossDecision } = req.body;
     const match = await Match.findById(req.params.id);
@@ -120,7 +120,7 @@ exports.startMatch = async (req, res) => {
 };
 
 // Update ball by ball
-exports.updateBallByBall = async (req, res) => {
+export const updateBallByBall = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id);
 
@@ -130,6 +130,16 @@ exports.updateBallByBall = async (req, res) => {
 
     const { bowler, batsman, runs, extras, extraType, isWicket, wicketType, dismissedPlayer, boundaryType, additionalRuns } = req.body;
     const currentInnings = match.innings[match.currentInnings - 1];
+
+    // Sanitize empty strings to null for ObjectId fields
+    const sanitizedBowler = bowler && bowler !== '' ? bowler : null;
+    const sanitizedBatsman = batsman && batsman !== '' ? batsman : null;
+    const sanitizedDismissedPlayer = dismissedPlayer && dismissedPlayer !== '' ? dismissedPlayer : null;
+
+    // Validate required fields
+    if (!sanitizedBowler || !sanitizedBatsman) {
+      return res.status(400).json({ message: 'Bowler and batsman are required fields' });
+    }
 
     // YYC Rule: No-balls and wides are 4 runs each
     const extrasPenalty = (extraType === 'wide' || extraType === 'noball') ? 4 : (extras || 0);
@@ -160,14 +170,14 @@ exports.updateBallByBall = async (req, res) => {
     const ballData = {
       overNumber: Math.floor(currentInnings.balls / 4) + 1,
       ballNumber: (currentInnings.balls % 4) + 1,
-      bowler,
-      batsman,
+      bowler: sanitizedBowler,
+      batsman: sanitizedBatsman,
       runs: boundaryRuns,
       extras: extrasPenalty,
       extraType: extraType || 'none',
       isWicket: isWicket || false,
       wicketType: wicketType || 'none',
-      dismissedPlayer: dismissedPlayer || null,
+      dismissedPlayer: sanitizedDismissedPlayer,
       boundaryType: boundaryType || 'none',
       additionalRuns: addRuns
     };
@@ -203,12 +213,12 @@ exports.updateBallByBall = async (req, res) => {
 
     // Update batting scorecard
     let batsmanScore = currentInnings.battingScorecard.find(
-      b => b.player.toString() === batsman.toString()
+      b => b.player.toString() === sanitizedBatsman.toString()
     );
 
     if (!batsmanScore) {
       batsmanScore = {
-        player: batsman,
+        player: sanitizedBatsman,
         runs: 0,
         balls: 0,
         fours: 0,
@@ -236,19 +246,19 @@ exports.updateBallByBall = async (req, res) => {
       ? ((batsmanScore.runs / batsmanScore.balls) * 100).toFixed(2)
       : 0;
 
-    if (isWicket && dismissedPlayer.toString() === batsman.toString()) {
+    if (isWicket && sanitizedDismissedPlayer && sanitizedDismissedPlayer.toString() === sanitizedBatsman.toString()) {
       batsmanScore.isOut = true;
       batsmanScore.howOut = wicketType;
     }
 
     // Update bowling scorecard
     let bowlerStats = currentInnings.bowlingScorecard.find(
-      b => b.player.toString() === bowler.toString()
+      b => b.player.toString() === sanitizedBowler.toString()
     );
 
     if (!bowlerStats) {
       bowlerStats = {
-        player: bowler,
+        player: sanitizedBowler,
         overs: 0,
         balls: 0,
         runs: 0,
@@ -386,7 +396,7 @@ async function calculateMatchResult(match) {
 }
 
 // Get live matches
-exports.getLiveMatches = async (req, res) => {
+export const getLiveMatches = async (req, res) => {
   try {
     const matches = await Match.find({ status: 'live' })
       .populate('team1', 'name shortName')

@@ -1,8 +1,8 @@
-const Player = require('../models/Player');
-const Team = require('../models/Team');
+import Player from '../models/Player.js';
+import Team from '../models/Team.js';
 
 // Get all players
-exports.getAllPlayers = async (req, res) => {
+export const getAllPlayers = async (req, res) => {
   try {
     const players = await Player.find().populate('team', 'name shortName');
     res.json(players);
@@ -12,7 +12,7 @@ exports.getAllPlayers = async (req, res) => {
 };
 
 // Get player by ID
-exports.getPlayerById = async (req, res) => {
+export const getPlayerById = async (req, res) => {
   try {
     const player = await Player.findById(req.params.id).populate('team');
     if (!player) {
@@ -25,7 +25,7 @@ exports.getPlayerById = async (req, res) => {
 };
 
 // Create player
-exports.createPlayer = async (req, res) => {
+export const createPlayer = async (req, res) => {
   try {
     const player = new Player(req.body);
     const newPlayer = await player.save();
@@ -43,7 +43,7 @@ exports.createPlayer = async (req, res) => {
 };
 
 // Update player
-exports.updatePlayer = async (req, res) => {
+export const updatePlayer = async (req, res) => {
   try {
     const player = await Player.findByIdAndUpdate(
       req.params.id,
@@ -60,7 +60,7 @@ exports.updatePlayer = async (req, res) => {
 };
 
 // Delete player
-exports.deletePlayer = async (req, res) => {
+export const deletePlayer = async (req, res) => {
   try {
     const player = await Player.findById(req.params.id);
     if (!player) {
@@ -81,7 +81,7 @@ exports.deletePlayer = async (req, res) => {
 };
 
 // Get top batsmen
-exports.getTopBatsmen = async (req, res) => {
+export const getTopBatsmen = async (req, res) => {
   try {
     const limit = req.query.limit || 20;
     const players = await Player.find({ 'battingStats.innings': { $gt: 0 } })
@@ -95,7 +95,7 @@ exports.getTopBatsmen = async (req, res) => {
 };
 
 // Get top bowlers
-exports.getTopBowlers = async (req, res) => {
+export const getTopBowlers = async (req, res) => {
   try {
     const limit = req.query.limit || 20;
     const players = await Player.find({ 'bowlingStats.innings': { $gt: 0 } })

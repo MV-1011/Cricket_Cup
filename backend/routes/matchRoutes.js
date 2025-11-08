@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
+import * as matchController from '../controllers/matchController.js';
 const router = express.Router();
-const matchController = require('../controllers/matchController');
 
 router.get('/', matchController.getAllMatches);
 router.get('/live', matchController.getLiveMatches);
@@ -11,4 +11,4 @@ router.delete('/:id', matchController.deleteMatch);
 router.post('/:id/start', matchController.startMatch);
 router.post('/:id/ball', matchController.updateBallByBall);
 
-module.exports = router;
+export default router;

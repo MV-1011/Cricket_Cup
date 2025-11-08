@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
+import * as playerController from '../controllers/playerController.js';
 const router = express.Router();
-const playerController = require('../controllers/playerController');
 
 router.get('/', playerController.getAllPlayers);
 router.get('/top-batsmen', playerController.getTopBatsmen);
@@ -10,4 +10,4 @@ router.post('/', playerController.createPlayer);
 router.put('/:id', playerController.updatePlayer);
 router.delete('/:id', playerController.deletePlayer);
 
-module.exports = router;
+export default router;

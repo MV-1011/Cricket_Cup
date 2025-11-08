@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const playerSchema = new mongoose.Schema({
   name: {
@@ -73,4 +73,4 @@ playerSchema.methods.calculateEconomy = function() {
     : 0;
 };
 
-module.exports = mongoose.model('Player', playerSchema);
+export default mongoose.model('Player', playerSchema);

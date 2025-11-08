@@ -1,8 +1,8 @@
-const Team = require('../models/Team');
-const Player = require('../models/Player');
+import Team from '../models/Team.js';
+import Player from '../models/Player.js';
 
 // Get all teams
-exports.getAllTeams = async (req, res) => {
+export const getAllTeams = async (req, res) => {
   try {
     const teams = await Team.find().populate('players').sort({ points: -1, netRunRate: -1 });
     res.json(teams);
@@ -12,7 +12,7 @@ exports.getAllTeams = async (req, res) => {
 };
 
 // Get team by ID
-exports.getTeamById = async (req, res) => {
+export const getTeamById = async (req, res) => {
   try {
     const team = await Team.findById(req.params.id).populate('players');
     if (!team) {
@@ -25,7 +25,7 @@ exports.getTeamById = async (req, res) => {
 };
 
 // Create team
-exports.createTeam = async (req, res) => {
+export const createTeam = async (req, res) => {
   try {
     const team = new Team(req.body);
     const newTeam = await team.save();
@@ -36,7 +36,7 @@ exports.createTeam = async (req, res) => {
 };
 
 // Update team
-exports.updateTeam = async (req, res) => {
+export const updateTeam = async (req, res) => {
   try {
     const team = await Team.findByIdAndUpdate(
       req.params.id,
@@ -53,7 +53,7 @@ exports.updateTeam = async (req, res) => {
 };
 
 // Delete team
-exports.deleteTeam = async (req, res) => {
+export const deleteTeam = async (req, res) => {
   try {
     const team = await Team.findByIdAndDelete(req.params.id);
     if (!team) {
@@ -66,7 +66,7 @@ exports.deleteTeam = async (req, res) => {
 };
 
 // Get standings
-exports.getStandings = async (req, res) => {
+export const getStandings = async (req, res) => {
   try {
     const teams = await Team.find()
       .sort({ points: -1, netRunRate: -1 })

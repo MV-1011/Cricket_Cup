@@ -1,11 +1,20 @@
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const dotenv = require('dotenv');
-const http = require('http');
-const socketIo = require('socket.io');
-const path = require('path');
-const connectDB = require('./config/db');
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
+import http from 'http';
+import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import connectDB from './config/db.js';
+import teamRoutes from './routes/teamRoutes.js';
+import playerRoutes from './routes/playerRoutes.js';
+import matchRoutes from './routes/matchRoutes.js';
+
+// Get __dirname equivalent in ES6
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 dotenv.config();
@@ -16,7 +25,7 @@ connectDB();
 // Initialize Express app
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
+const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
@@ -34,11 +43,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Import routes
-const teamRoutes = require('./routes/teamRoutes');
-const playerRoutes = require('./routes/playerRoutes');
-const matchRoutes = require('./routes/matchRoutes');
-
 // Routes
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
@@ -46,7 +50,6 @@ app.use('/api/matches', matchRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  const mongoose = require('mongoose');
   const isMongoConnected = mongoose.connection.readyState === 1;
 
   res.json({
