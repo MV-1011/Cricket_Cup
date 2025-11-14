@@ -95,12 +95,12 @@ function LiveScore() {
   // Helper function to check if a player has completed all their overs
   const hasPlayerCompletedOvers = (playerId) => {
     // Count how many different pairs this player has been part of
-    let pairCount = 0;
-    usedPairs.forEach(pair => {
-      if (pair.player1 === playerId || pair.player2 === playerId) {
-        pairCount++;
-      }
-    });
+    // let pairCount = 0;
+    // usedPairs.forEach(pair => {
+    //   if (pair.player1 === playerId || pair.player2 === playerId) {
+    //     pairCount++;
+    //   }
+    // });
 
     // In YYC rules, each player can be in multiple pairs
     // But we check if they can form any new valid pair
@@ -381,11 +381,10 @@ function LiveScore() {
 
     try {
       console.log('Sending ball data:', ballData);
-      const response = await matchAPI.updateBall(id, ballData);
+      await matchAPI.updateBall(id, ballData);
       console.log('Ball update response received');
 
       const currentInnings = match.innings[match.currentInnings - 1];
-      const currentBall = currentInnings.balls % 4;
 
       // Rotate strike logic
       // YYC Rules:
