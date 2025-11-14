@@ -68,9 +68,12 @@ app.use(express.static(path.join(__dirname, '../frontend/build')));
 // Anything that doesn't match API routes or static files, send back index.html
 // This allows client-side routing to work
 app.get('*', (req, res) => {
-  // Skip API routes
+  // Skip API routes and socket.io
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ message: 'API endpoint not found' });
+  }
+  if (req.path.startsWith('/socket.io')) {
+    return res.status(404).json({ message: 'Socket.IO endpoint - should not reach here' });
   }
   res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
 });

@@ -154,6 +154,8 @@ export const updateBallByBall = async (req, res) => {
       boundaryRuns = 4 + addRuns; // 4 + any runs
     } else if (boundaryType === 'ceiling') {
       boundaryRuns = 2 + addRuns; // 2 + extra runs
+    } else if (boundaryType === 'ceiling_backwall') {
+      boundaryRuns = 4; // Fixed 4 runs (YYC Rule: ceiling then back wall)
     } else if (boundaryType === 'side_wall_air') {
       boundaryRuns = 2 + addRuns; // 2 + extra runs
     } else if (boundaryType === 'side_wall_ground') {
@@ -166,13 +168,19 @@ export const updateBallByBall = async (req, res) => {
       boundaryRuns = runs || 0; // Normal runs
     }
 
+    // YYC CRITICAL RULE: "When a player is declared out, the ball is dead, and 4 runs will be deducted.
+    // No runs scored before being out will be counted."
+    // This means: If wicket, ignore all runs on that ball and apply -4 penalty
+    const finalBoundaryRuns = isWicket ? 0 : boundaryRuns;
+    const wicketPenalty = isWicket ? -4 : 0;
+
     // Add ball to ball-by-ball
     const ballData = {
       overNumber: Math.floor(currentInnings.balls / 4) + 1,
       ballNumber: (currentInnings.balls % 4) + 1,
       bowler: sanitizedBowler,
       batsman: sanitizedBatsman,
-      runs: boundaryRuns,
+      runs: finalBoundaryRuns,
       extras: extrasPenalty,
       extraType: extraType || 'none',
       isWicket: isWicket || false,
@@ -185,7 +193,7 @@ export const updateBallByBall = async (req, res) => {
     currentInnings.ballByBall.push(ballData);
 
     // Update innings totals
-    currentInnings.runs += boundaryRuns + extrasPenalty;
+    currentInnings.runs += finalBoundaryRuns + extrasPenalty + wicketPenalty;
 
     // YYC Rule: In last 2 overs, wides/no-balls ARE re-bowled
     // In first 6 overs, wides/no-balls are NOT re-bowled
@@ -212,10 +220,26 @@ export const updateBallByBall = async (req, res) => {
     }
 
     // Update batting scorecard
+    console.log('Looking for batsman in scorecard:', sanitizedBatsman.toString());
+    console.log('Current batting scorecard:', currentInnings.battingScorecard.map(b => ({
+      playerId: b.player._id ? b.player._id.toString() : b.player.toString(),
+      playerObj: b.player,
+      runs: b.runs,
+      balls: b.balls
+    })));
+
     let batsmanScore = currentInnings.battingScorecard.find(
-      b => b.player.toString() === sanitizedBatsman.toString()
+      b => {
+        const playerId = b.player._id ? b.player._id.toString() : b.player.toString();
+        console.log(`Comparing ${playerId} === ${sanitizedBatsman.toString()}: ${playerId === sanitizedBatsman.toString()}`);
+        return playerId === sanitizedBatsman.toString();
+      }
     );
 
+    console.log('Found batsman in scorecard:', batsmanScore ? 'YES' : 'NO');
+
+    let isNewBatsman = false;
+    let batsmanIndex = -1;
     if (!batsmanScore) {
       batsmanScore = {
         player: sanitizedBatsman,
@@ -228,34 +252,113 @@ export const updateBallByBall = async (req, res) => {
         howOut: ''
       };
       currentInnings.battingScorecard.push(batsmanScore);
+      batsmanIndex = currentInnings.battingScorecard.length - 1;
+      isNewBatsman = true;
+    } else {
+      // Find the index of the batsman in the scorecard
+      batsmanIndex = currentInnings.battingScorecard.findIndex(
+        b => {
+          const playerId = b.player._id ? b.player._id.toString() : b.player.toString();
+          return playerId === sanitizedBatsman.toString();
+        }
+      );
     }
 
+    // YYC Rule: Batsman ball count
+    // First 6 overs: All balls count (including wide/no-ball)
+    // Last 2 overs: Wide/no-ball doesn't count
+    console.log('Ball increment check:', { extraType, shouldReBowl, isWicket, finalBoundaryRuns });
     if (extraType !== 'wide' && extraType !== 'noball') {
-      batsmanScore.balls += 1;
+      // Normal ball always counts
+      console.log('Incrementing batsman balls (normal ball)');
+      currentInnings.battingScorecard[batsmanIndex].balls += 1;
+    } else if (!shouldReBowl) {
+      // First 6 overs: wide/no-ball DOES count for batsman
+      console.log('Incrementing batsman balls (wide/noball in first 6 overs)');
+      currentInnings.battingScorecard[batsmanIndex].balls += 1;
+    }
+    console.log('Batsman balls after increment:', currentInnings.battingScorecard[batsmanIndex].balls);
+    // Last 2 overs: wide/no-ball does NOT count (shouldReBowl = true)
+
+    // YYC Rule: Only add runs if NOT a wicket (wicket = no runs counted)
+    // Batsmen can score off no balls (4 runs + any from bat)
+    if (!isWicket) {
+      if (extraType === 'none' || extraType === 'noball') {
+        currentInnings.battingScorecard[batsmanIndex].runs += finalBoundaryRuns;
+        console.log(`Added ${finalBoundaryRuns} runs to batsman. New total: ${currentInnings.battingScorecard[batsmanIndex].runs}`);
+      }
     }
 
-    if (extraType === 'none' || extraType === 'noball') {
-      batsmanScore.runs += boundaryRuns;
+    console.log('After ball updates - Batsman:', {
+      runs: currentInnings.battingScorecard[batsmanIndex].runs,
+      balls: currentInnings.battingScorecard[batsmanIndex].balls,
+      strikeRate: currentInnings.battingScorecard[batsmanIndex].strikeRate
+    });
+
+    // Count fours and sixes based on boundary type (only if not out)
+    if (!isWicket) {
+      if (boundaryType === 'straight_wall_ground') currentInnings.battingScorecard[batsmanIndex].fours += 1;
+      if (boundaryType === 'straight_wall_air') currentInnings.battingScorecard[batsmanIndex].sixes += 1;
     }
 
-    // Count fours and sixes based on boundary type
-    if (boundaryType === 'straight_wall_ground') batsmanScore.fours += 1;
-    if (boundaryType === 'straight_wall_air') batsmanScore.sixes += 1;
+    // YYC Rule: When wicket, deduct 4 runs from batsman's score
+    // The dismissed player gets the penalty
+    if (isWicket && sanitizedDismissedPlayer) {
+      console.log('WICKET DETECTED!');
+      console.log('Dismissed Player ID:', sanitizedDismissedPlayer.toString());
+      console.log('Current Batsman ID:', sanitizedBatsman.toString());
+      console.log('Current Batting Scorecard:', currentInnings.battingScorecard.map(b => ({
+        player: b.player._id ? b.player._id.toString() : b.player.toString(),
+        runs: b.runs,
+        balls: b.balls
+      })));
 
-    batsmanScore.strikeRate = batsmanScore.balls > 0
-      ? ((batsmanScore.runs / batsmanScore.balls) * 100).toFixed(2)
-      : 0;
+      // Find the dismissed batsman in scorecard (might be different from current batsman)
+      let dismissedBatsmanScore = currentInnings.battingScorecard.find(
+        b => {
+          const playerId = b.player._id ? b.player._id.toString() : b.player.toString();
+          return playerId === sanitizedDismissedPlayer.toString();
+        }
+      );
 
-    if (isWicket && sanitizedDismissedPlayer && sanitizedDismissedPlayer.toString() === sanitizedBatsman.toString()) {
-      batsmanScore.isOut = true;
-      batsmanScore.howOut = wicketType;
+      console.log('Found dismissed batsman in scorecard:', dismissedBatsmanScore ? 'YES' : 'NO');
+      if (dismissedBatsmanScore) {
+        console.log('Dismissed batsman runs BEFORE penalty:', dismissedBatsmanScore.runs);
+      }
+
+      // If dismissed batsman not found (shouldn't happen), use current batsman
+      if (!dismissedBatsmanScore) {
+        console.log('WARNING: Dismissed batsman not found, using current batsman');
+        dismissedBatsmanScore = batsmanScore;
+      }
+
+      dismissedBatsmanScore.isOut = true;
+      dismissedBatsmanScore.howOut = wicketType;
+      dismissedBatsmanScore.runs -= 4; // Wicket penalty (in addition to no runs being counted on that ball)
+
+      console.log('Dismissed batsman runs AFTER penalty:', dismissedBatsmanScore.runs);
+
+      // Recalculate strike rate after penalty
+      dismissedBatsmanScore.strikeRate = dismissedBatsmanScore.balls > 0
+        ? ((dismissedBatsmanScore.runs / dismissedBatsmanScore.balls) * 100).toFixed(2)
+        : 0;
+    } else {
+      // No wicket, just calculate strike rate normally
+      currentInnings.battingScorecard[batsmanIndex].strikeRate = currentInnings.battingScorecard[batsmanIndex].balls > 0
+        ? ((currentInnings.battingScorecard[batsmanIndex].runs / currentInnings.battingScorecard[batsmanIndex].balls) * 100).toFixed(2)
+        : 0;
     }
 
     // Update bowling scorecard
     let bowlerStats = currentInnings.bowlingScorecard.find(
-      b => b.player.toString() === sanitizedBowler.toString()
+      b => {
+        const playerId = b.player._id ? b.player._id.toString() : b.player.toString();
+        return playerId === sanitizedBowler.toString();
+      }
     );
 
+    let isNewBowler = false;
+    let bowlerIndex = -1;
     if (!bowlerStats) {
       bowlerStats = {
         player: sanitizedBowler,
@@ -267,23 +370,48 @@ export const updateBallByBall = async (req, res) => {
         economy: 0
       };
       currentInnings.bowlingScorecard.push(bowlerStats);
+      bowlerIndex = currentInnings.bowlingScorecard.length - 1;
+      isNewBowler = true;
+    } else {
+      // Find the index of the bowler in the scorecard
+      bowlerIndex = currentInnings.bowlingScorecard.findIndex(
+        b => {
+          const playerId = b.player._id ? b.player._id.toString() : b.player.toString();
+          return playerId === sanitizedBowler.toString();
+        }
+      );
     }
 
+    // YYC Rule: Bowler ball count
+    // First 6 overs: All balls count (including wide/no-ball)
+    // Last 2 overs: Wide/no-ball doesn't count
     if (extraType !== 'wide' && extraType !== 'noball') {
-      bowlerStats.balls += 1;
-      bowlerStats.overs = Math.floor(bowlerStats.balls / 4) + (bowlerStats.balls % 4) / 10;
+      // Normal ball always counts
+      currentInnings.bowlingScorecard[bowlerIndex].balls += 1;
+      currentInnings.bowlingScorecard[bowlerIndex].overs = Math.floor(currentInnings.bowlingScorecard[bowlerIndex].balls / 4) + (currentInnings.bowlingScorecard[bowlerIndex].balls % 4) / 10;
+    } else if (!shouldReBowl) {
+      // First 6 overs: wide/no-ball DOES count for bowler
+      currentInnings.bowlingScorecard[bowlerIndex].balls += 1;
+      currentInnings.bowlingScorecard[bowlerIndex].overs = Math.floor(currentInnings.bowlingScorecard[bowlerIndex].balls / 4) + (currentInnings.bowlingScorecard[bowlerIndex].balls % 4) / 10;
     }
+    // Last 2 overs: wide/no-ball does NOT count (shouldReBowl = true)
 
-    bowlerStats.runs += boundaryRuns + extrasPenalty;
+    // Bowler gets charged for runs + extras + wicket penalty
+    currentInnings.bowlingScorecard[bowlerIndex].runs += finalBoundaryRuns + extrasPenalty + wicketPenalty;
 
     if (isWicket) {
-      bowlerStats.wickets += 1;
+      currentInnings.bowlingScorecard[bowlerIndex].wickets += 1;
     }
 
-    const totalOvers = Math.floor(bowlerStats.balls / 4);
-    bowlerStats.economy = totalOvers > 0
-      ? (bowlerStats.runs / totalOvers).toFixed(2)
+    const totalOvers = Math.floor(currentInnings.bowlingScorecard[bowlerIndex].balls / 4);
+    currentInnings.bowlingScorecard[bowlerIndex].economy = totalOvers > 0
+      ? (currentInnings.bowlingScorecard[bowlerIndex].runs / totalOvers).toFixed(2)
       : 0;
+
+    // Mark nested arrays as modified for Mongoose to detect changes
+    // This is crucial for Mongoose to save updates to scorecard entries
+    // Must be called on EVERY ball, not just when new entries are added
+    match.markModified('innings');
 
     // Check if innings ended
     if (currentInnings.wickets >= 7 || currentInnings.balls >= match.maxOvers * 4) {
@@ -309,7 +437,46 @@ export const updateBallByBall = async (req, res) => {
       }
     }
 
+    console.log('BEFORE SAVE - Batsman scorecard:', currentInnings.battingScorecard.map(b => ({
+      player: b.player._id ? b.player._id.toString() : b.player.toString(),
+      runs: b.runs,
+      balls: b.balls,
+      strikeRate: b.strikeRate
+    })));
+    console.log('BEFORE SAVE - Bowler scorecard:', currentInnings.bowlingScorecard.map(b => ({
+      player: b.player._id ? b.player._id.toString() : b.player.toString(),
+      runs: b.runs,
+      balls: b.balls,
+      overs: b.overs
+    })));
+
     await match.save();
+
+    console.log('AFTER SAVE - Fetching match to verify...');
+    const savedMatch = await Match.findById(match._id).populate('team1').populate('team2');
+    const savedInnings = savedMatch.innings[savedMatch.currentInnings - 1];
+    console.log('AFTER SAVE - Batsman scorecard:', savedInnings.battingScorecard.map(b => ({
+      player: b.player._id ? b.player._id.toString() : b.player.toString(),
+      runs: b.runs,
+      balls: b.balls,
+      strikeRate: b.strikeRate
+    })));
+    console.log('AFTER SAVE - Bowler scorecard:', savedInnings.bowlingScorecard.map(b => ({
+      player: b.player._id ? b.player._id.toString() : b.player.toString(),
+      runs: b.runs,
+      balls: b.balls,
+      overs: b.overs
+    })));
+
+    // Reconcile scores after saving
+    const reconciliation = reconcileInningsScore(currentInnings);
+    if (!reconciliation.isValid) {
+      console.warn('⚠️  Score reconciliation warning for match', match.matchNumber);
+      console.warn('   Discrepancies:', reconciliation.discrepancies);
+      console.warn('   Details:', reconciliation);
+    } else {
+      console.log('✅ Score reconciliation passed for match', match.matchNumber);
+    }
 
     // Emit socket event for real-time update
     if (req.io) {
@@ -321,6 +488,48 @@ export const updateBallByBall = async (req, res) => {
     res.status(400).json({ message: error.message });
   }
 };
+
+// Reconcile innings score to ensure data integrity
+function reconcileInningsScore(innings) {
+  // Calculate total runs from batting scorecard
+  const batsmenRuns = innings.battingScorecard.reduce((sum, batsman) => sum + batsman.runs, 0);
+
+  // Calculate total runs from bowling scorecard
+  const bowlersRunsConceded = innings.bowlingScorecard.reduce((sum, bowler) => sum + bowler.runs, 0);
+
+  // Calculate runs from ball-by-ball
+  const ballByBallRuns = innings.ballByBall.reduce((sum, ball) => sum + ball.runs + ball.extras, 0);
+
+  // Expected total: batsmen runs + extras
+  const expectedTotal = batsmenRuns + innings.extras;
+
+  const reconciliation = {
+    inningsTotal: innings.runs,
+    batsmenRuns,
+    extras: innings.extras,
+    expectedTotal,
+    bowlersRunsConceded,
+    ballByBallRuns,
+    isValid: innings.runs === expectedTotal &&
+             innings.runs === bowlersRunsConceded &&
+             innings.runs === ballByBallRuns,
+    discrepancies: []
+  };
+
+  if (innings.runs !== expectedTotal) {
+    reconciliation.discrepancies.push(`Innings total (${innings.runs}) != Batsmen + Extras (${expectedTotal})`);
+  }
+
+  if (innings.runs !== bowlersRunsConceded) {
+    reconciliation.discrepancies.push(`Innings total (${innings.runs}) != Bowlers conceded (${bowlersRunsConceded})`);
+  }
+
+  if (innings.runs !== ballByBallRuns) {
+    reconciliation.discrepancies.push(`Innings total (${innings.runs}) != Ball-by-ball total (${ballByBallRuns})`);
+  }
+
+  return reconciliation;
+}
 
 // Calculate match result and update team standings
 async function calculateMatchResult(match) {
@@ -402,6 +611,32 @@ export const getLiveMatches = async (req, res) => {
       .populate('team1', 'name shortName')
       .populate('team2', 'name shortName');
     res.json(matches);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Restart match - clear all scores and reset to scheduled
+export const restartMatch = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+
+    // Reset match to initial state
+    match.status = 'scheduled';
+    match.currentInnings = 1;
+    match.tossWinner = null;
+    match.tossDecision = null;
+    match.battingFirst = null;
+    match.winner = null;
+    match.resultText = '';
+    match.innings = [];
+
+    await match.save();
+    res.json({ message: 'Match restarted successfully', match });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

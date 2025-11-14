@@ -96,11 +96,16 @@ const matchSchema = new mongoose.Schema({
   },
   venue: {
     type: String,
-    required: true
+    required: false,
+    default: ''
   },
   date: {
     type: Date,
     required: true
+  },
+  time: {
+    type: String,
+    required: false
   },
   status: {
     type: String,

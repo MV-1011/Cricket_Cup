@@ -11,8 +11,8 @@ function Matches() {
     matchNumber: '',
     team1: '',
     team2: '',
-    venue: '',
     date: '',
+    time: '',
     maxOvers: 8
   });
 
@@ -49,8 +49,8 @@ function Matches() {
         matchNumber: '',
         team1: '',
         team2: '',
-        venue: '',
         date: '',
+        time: '',
         maxOvers: 8
       });
       setShowForm(false);
@@ -102,7 +102,7 @@ function Matches() {
             className="btn btn-primary"
             onClick={() => {
               setShowForm(!showForm);
-              setFormData({ matchNumber: '', team1: '', team2: '', venue: '', date: '', maxOvers: 8 });
+              setFormData({ matchNumber: '', team1: '', team2: '', date: '', time: '', maxOvers: 8 });
             }}
           >
             {showForm ? 'Cancel' : 'Add Match'}
@@ -154,22 +154,22 @@ function Matches() {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Venue</label>
-              <input
-                type="text"
-                className="form-control"
-                value={formData.venue}
-                onChange={(e) => setFormData({ ...formData, venue: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
               <label className="form-label">Date</label>
               <input
                 type="date"
                 className="form-control"
                 value={formData.date}
                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Time</label>
+              <input
+                type="time"
+                className="form-control"
+                value={formData.time}
+                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                 required
               />
             </div>
@@ -196,8 +196,8 @@ function Matches() {
             <tr>
               <th>Match #</th>
               <th>Teams</th>
-              <th>Venue</th>
               <th>Date</th>
+              <th>Time</th>
               <th>Status</th>
               <th>Result</th>
               <th>Actions</th>
@@ -217,8 +217,8 @@ function Matches() {
                   <td>
                     {match.team1?.name || 'Unknown'} vs {match.team2?.name || 'Unknown'}
                   </td>
-                  <td>{match.venue}</td>
                   <td>{new Date(match.date).toLocaleDateString()}</td>
+                  <td>{match.time || '-'}</td>
                   <td>
                     <span style={getStatusBadge(match.status)}>
                       {match.status.toUpperCase()}

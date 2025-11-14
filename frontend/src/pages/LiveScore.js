@@ -24,6 +24,8 @@ function LiveScore() {
   const [striker, setStriker] = useState(''); // Current striker from the pair
   const [pairStartOver, setPairStartOver] = useState(0);
   const [showPairSelection, setShowPairSelection] = useState(false);
+  const [usedPairs, setUsedPairs] = useState([]); // Track used batting pairs
+  const [lastBowler, setLastBowler] = useState(''); // Track last over's bowler
 
   // Toss dialog states
   const [showTossDialog, setShowTossDialog] = useState(false);
@@ -58,6 +60,13 @@ function LiveScore() {
     };
   }, [id, fetchMatch]);
 
+  // Debug useEffect to monitor striker state changes
+  useEffect(() => {
+    console.log('Striker state changed to:', striker);
+    console.log('Batting pair:', battingPair);
+    console.log('Show pair selection:', showPairSelection);
+  }, [striker, battingPair, showPairSelection]);
+
   const fetchPlayers = async () => {
     try {
       const response = await playerAPI.getAll();
@@ -65,6 +74,89 @@ function LiveScore() {
     } catch (error) {
       console.error('Error fetching players:', error);
     }
+  };
+
+  // Helper function to check if a pair has already batted
+  const isPairUsed = (player1Id, player2Id) => {
+    return usedPairs.some(pair =>
+      (pair.player1 === player1Id && pair.player2 === player2Id) ||
+      (pair.player1 === player2Id && pair.player2 === player1Id)
+    );
+  };
+
+  // Helper function to get bowler's completed overs from current innings
+  const getBowlerOvers = (bowlerId) => {
+    if (!match || !match.innings || match.innings.length === 0) return 0;
+    const currentInnings = match.innings[match.currentInnings - 1];
+    const bowlerStats = currentInnings.bowlingScorecard.find(b => b.player._id === bowlerId || b.player === bowlerId);
+    return bowlerStats ? Math.floor(bowlerStats.balls / 4) : 0;
+  };
+
+  // Helper function to check if a player has completed all their overs
+  const hasPlayerCompletedOvers = (playerId) => {
+    // Count how many different pairs this player has been part of
+    let pairCount = 0;
+    usedPairs.forEach(pair => {
+      if (pair.player1 === playerId || pair.player2 === playerId) {
+        pairCount++;
+      }
+    });
+
+    // In YYC rules, each player can be in multiple pairs
+    // But we check if they can form any new valid pair
+    if (!match || !match.innings || match.innings.length === 0) return false;
+    const currentInnings = match.innings[match.currentInnings - 1];
+    const battingTeamId = currentInnings.battingTeam.toString();
+    const teamPlayers = allPlayers.filter(p => p.team._id === battingTeamId);
+
+    // Check if this player can form a new pair with ANY other player
+    const canFormNewPair = teamPlayers.some(otherPlayer => {
+      if (otherPlayer._id === playerId) return false;
+      return !isPairUsed(playerId, otherPlayer._id);
+    });
+
+    return !canFormNewPair;
+  };
+
+  // Helper function to get available players for batting (exclude used pairs)
+  const getAvailableBatsmen = (teamPlayers) => {
+    if (!match || !match.innings || match.innings.length === 0) return teamPlayers;
+    const currentInnings = match.innings[match.currentInnings - 1];
+
+    // Get players who have already batted
+    const battedPlayers = currentInnings.battingScorecard.map(b => b.player._id || b.player);
+
+    // Return players who haven't batted yet, or have batted but can form a new valid pair
+    return teamPlayers.filter(player => {
+      // If player hasn't batted at all, they're available
+      if (!battedPlayers.includes(player._id)) return true;
+
+      // If player has batted, check if they can form a new unused pair
+      const canFormNewPair = teamPlayers.some(otherPlayer => {
+        if (otherPlayer._id === player._id) return false;
+        return !isPairUsed(player._id, otherPlayer._id);
+      });
+
+      return canFormNewPair;
+    });
+  };
+
+  // Helper function to get player status for display
+  const getPlayerBattingStatus = (playerId, includeColor = false) => {
+    if (hasPlayerCompletedOvers(playerId)) {
+      return includeColor ? ' 🔴 Completed' : ' ● Completed';
+    }
+
+    // Check if player has batted but can still form new pairs
+    if (!match || !match.innings || match.innings.length === 0) return includeColor ? ' 🟢 Available' : ' ● Available';
+    const currentInnings = match.innings[match.currentInnings - 1];
+    const battedPlayers = currentInnings.battingScorecard.map(b => b.player._id || b.player);
+
+    if (battedPlayers.includes(playerId)) {
+      return includeColor ? ' 🟡 Batted' : ' ● Batted';
+    }
+
+    return includeColor ? ' 🟢 Available' : ' ● Available';
   };
 
   const handleStartMatch = async (e) => {
@@ -79,6 +171,7 @@ function LiveScore() {
       await matchAPI.startMatch(id, tossData);
       setShowTossDialog(false);
       setTossData({ tossWinner: '', tossDecision: 'bat' });
+      setShowPairSelection(true); // Show pair selection when match starts
       fetchMatch();
     } catch (error) {
       console.error('Error starting match:', error);
@@ -87,6 +180,8 @@ function LiveScore() {
   };
 
   const handleSetBattingPair = () => {
+    console.log('handleSetBattingPair called with:', battingPair);
+
     if (!battingPair.player1 || !battingPair.player2) {
       alert('Please select both batsmen for the pair');
       return;
@@ -96,14 +191,27 @@ function LiveScore() {
       return;
     }
 
+    // Check if this pair has already batted
+    if (isPairUsed(battingPair.player1, battingPair.player2)) {
+      alert('This batting pair has already played their 2 overs. Please select a different pair.');
+      return;
+    }
+
     const currentInnings = match.innings[match.currentInnings - 1];
     const currentOver = Math.floor(currentInnings.balls / 4);
 
-    // Set the striker as player1 initially
-    setStriker(battingPair.player1);
-    setCurrentBatsman(battingPair.player1);
+    // YYC Rule: Player 1 (Batsman 1) is ALWAYS the striker when a new pair starts
+    const firstBatsmanId = battingPair.player1;
+    console.log('Setting striker to Player 1:', firstBatsmanId);
+
+    // Set all states together
+    setStriker(firstBatsmanId);
+    setCurrentBatsman(firstBatsmanId);
+    setUsedPairs([...usedPairs, { player1: battingPair.player1, player2: battingPair.player2 }]);
     setPairStartOver(currentOver);
     setShowPairSelection(false);
+
+    console.log('handleSetBattingPair complete - striker should now be:', firstBatsmanId);
   };
 
   const rotateStrike = () => {
@@ -117,19 +225,90 @@ function LiveScore() {
     }
   };
 
+  const handleRestartMatch = async () => {
+    if (!window.confirm('Are you sure you want to restart this match? All scores and data will be deleted.')) {
+      return;
+    }
+
+    try {
+      await matchAPI.restartMatch(id);
+
+      // Reset all local state
+      setShowTossDialog(false);
+      setTossData({ tossWinner: '', tossDecision: 'bat' });
+      setBattingPair({ player1: '', player2: '' });
+      setStriker('');
+      setCurrentBatsman('');
+      setCurrentBowler('');
+      setShowPairSelection(false);
+      setUsedPairs([]);
+      setPairStartOver(0);
+      setAdditionalRuns(0);
+      setWicketType('none');
+      setDismissedPlayer('');
+      setLastBowler('');
+
+      // Refresh match data
+      await fetchMatch();
+
+      alert('Match restarted successfully!');
+    } catch (error) {
+      console.error('Error restarting match:', error);
+      alert('Error restarting match: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
   const handleQuickScore = async (scoreType) => {
     if (!battingPair.player1 || !battingPair.player2) {
       alert('Please select the batting pair first');
       return;
     }
-    if (!currentBowler) {
+
+    // Use striker or player1 as fallback for currentBatsman
+    let effectiveBatsman = currentBatsman;
+    if (!effectiveBatsman || effectiveBatsman === '') {
+      effectiveBatsman = striker || battingPair.player1;
+      if (effectiveBatsman && effectiveBatsman !== '') {
+        console.log('Using striker/player1 as batsman:', effectiveBatsman);
+        setCurrentBatsman(effectiveBatsman); // Update state for next time
+      } else {
+        alert('Current batsman not set. Please select the batting pair again.');
+        console.error('Batsman state:', { currentBatsman, striker, battingPair });
+        return;
+      }
+    }
+
+    if (!currentBowler || currentBowler === '') {
       alert('Please select the bowler');
       return;
     }
 
+    // YYC Rule: A bowler cannot bowl 2 continuous overs
+    const currentInnings = match.innings[match.currentInnings - 1];
+    const currentBall = currentInnings.balls % 4;
+
+    // If this is the first ball of a new over (ball 0 of the over)
+    if (currentBall === 0 && currentInnings.balls > 0) {
+      // Check if the current bowler is the same as the last over's bowler
+      if (lastBowler && currentBowler === lastBowler) {
+        alert('A bowler cannot bowl 2 continuous overs. Please select a different bowler.');
+        return;
+      }
+    }
+
+    // Ensure we have valid IDs (not empty strings)
+    const validBatsman = effectiveBatsman && effectiveBatsman !== '' ? effectiveBatsman : null;
+    const validBowler = currentBowler && currentBowler !== '' ? currentBowler : null;
+
+    if (!validBatsman || !validBowler) {
+      alert('Invalid batsman or bowler selection. Please reselect.');
+      console.error('Invalid IDs:', { batsman: effectiveBatsman, bowler: currentBowler });
+      return;
+    }
+
     let ballData = {
-      batsman: currentBatsman,
-      bowler: currentBowler,
+      batsman: validBatsman,
+      bowler: validBowler,
       runs: 0,
       extras: 0,
       extraType: 'none',
@@ -168,6 +347,10 @@ function LiveScore() {
         ballData.boundaryType = 'ceiling';
         ballData.additionalRuns = additionalRuns;
         break;
+      case 'ceiling_backwall':
+        ballData.boundaryType = 'ceiling_backwall';
+        ballData.additionalRuns = 0; // Fixed 4 runs, no additional
+        break;
       case 'side_wall_air':
         ballData.boundaryType = 'side_wall_air';
         ballData.additionalRuns = additionalRuns;
@@ -187,7 +370,9 @@ function LiveScore() {
       case 'wicket':
         ballData.isWicket = true;
         ballData.wicketType = wicketType || 'bowled';
-        ballData.dismissedPlayer = dismissedPlayer || currentBatsman;
+        // Sanitize dismissedPlayer - use validBatsman instead of currentBatsman
+        const validDismissedPlayer = (dismissedPlayer && dismissedPlayer !== '') ? dismissedPlayer : validBatsman;
+        ballData.dismissedPlayer = validDismissedPlayer;
         break;
       default:
         // Unknown score type, do nothing
@@ -195,31 +380,32 @@ function LiveScore() {
     }
 
     try {
-      await matchAPI.updateBall(id, ballData);
+      console.log('Sending ball data:', ballData);
+      const response = await matchAPI.updateBall(id, ballData);
+      console.log('Ball update response received');
 
       const currentInnings = match.innings[match.currentInnings - 1];
       const currentBall = currentInnings.balls % 4;
 
       // Rotate strike logic
-      // 1. After over ends (ball 4), swap striker
+      // YYC Rules:
+      // 1. After wicket, swap striker (new batsman comes, non-striker faces next ball)
       // 2. After odd runs (1, 3), swap striker
-      // 3. After wicket, keep same striker (new batsman comes to non-striker)
+      // 3. DO NOT swap on over end - striker continues
 
       let shouldRotate = false;
 
-      if (!ballData.isWicket) {
-        // Check if over just ended
-        if (currentBall === 3 && ballData.extraType !== 'wide' && ballData.extraType !== 'noball') {
-          shouldRotate = true;
-        }
-        // Check for odd runs
-        else if (scoreType === '1' || scoreType === '3') {
-          shouldRotate = true;
-        }
-        // Check if boundary with odd additional runs
-        else if ((ballData.boundaryType !== 'none' && ballData.additionalRuns % 2 === 1)) {
-          shouldRotate = true;
-        }
+      // YYC Rule: Strike changes on wicket
+      if (ballData.isWicket) {
+        shouldRotate = true;
+      }
+      // Check for odd runs (1, 3)
+      else if (scoreType === '1' || scoreType === '3') {
+        shouldRotate = true;
+      }
+      // Check if boundary with odd additional runs
+      else if ((ballData.boundaryType !== 'none' && ballData.additionalRuns % 2 === 1)) {
+        shouldRotate = true;
       }
 
       if (shouldRotate) {
@@ -230,6 +416,13 @@ function LiveScore() {
       setAdditionalRuns(0);
       setWicketType('none');
       setDismissedPlayer('');
+
+      // Update last bowler at the end of an over (when ball 4 is completed)
+      const newBall = (currentInnings.balls + 1) % 4;
+      if (newBall === 0) {
+        // Over just completed, save this bowler as last bowler
+        setLastBowler(validBowler);
+      }
 
       // Check if pair's 2 overs are complete
       const newOver = Math.floor((currentInnings.balls + 1) / 4);
@@ -263,17 +456,34 @@ function LiveScore() {
     p => currentInnings && p.team._id === currentInnings.bowlingTeam.toString()
   );
 
+  // Get available batsmen (filter out players who can't form new pairs)
+  const availableBatsmen = getAvailableBatsmen(battingTeamPlayers);
+
+  // Get available bowlers (filter out those who bowled 2 overs already)
+  const maxOversPerBowler = 2;
+  const availableBowlers = bowlingTeamPlayers.filter(bowler => {
+    const oversCompleted = getBowlerOvers(bowler._id);
+    return oversCompleted < maxOversPerBowler;
+  });
+
   return (
     <div className="container">
       <div className="card">
-        <div className="card-header">
-          Match {match.matchNumber}: {match.team1.name} vs {match.team2.name}
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Match {match.matchNumber}: {match.team1.name} vs {match.team2.name}</span>
+          <button
+            className="btn btn-danger"
+            onClick={handleRestartMatch}
+            style={{ padding: '0.5rem 1rem' }}
+          >
+            🔄 Restart Match
+          </button>
         </div>
 
         {match.status === 'scheduled' && (
           <div>
             <p>Match is scheduled for {new Date(match.date).toLocaleDateString()}</p>
-            <p>Venue: {match.venue}</p>
+            {match.time && <p>Time: {match.time}</p>}
 
             {!showTossDialog ? (
               <button className="btn btn-success" onClick={() => setShowTossDialog(true)}>
@@ -365,7 +575,7 @@ function LiveScore() {
                 <div className="team-score">
                   <h3>{match.innings[0].battingTeam === match.team1._id ? match.team1.shortName : match.team2.shortName}</h3>
                   <div className="score">{match.innings[0].runs}/{match.innings[0].wickets}</div>
-                  <p>{match.innings[0].overs.toFixed(1)} overs</p>
+                  <p>{match.innings[0].balls === 0 ? '0.0' : `${Math.floor((match.innings[0].balls - 1) / 4)}.${((match.innings[0].balls - 1) % 4) + 1}`} overs</p>
                 </div>
                 {match.innings[1] && (
                   <>
@@ -373,7 +583,7 @@ function LiveScore() {
                     <div className="team-score">
                       <h3>{match.innings[1].battingTeam === match.team1._id ? match.team1.shortName : match.team2.shortName}</h3>
                       <div className="score">{match.innings[1].runs}/{match.innings[1].wickets}</div>
-                      <p>{match.innings[1].overs.toFixed(1)} overs</p>
+                      <p>{match.innings[1].balls === 0 ? '0.0' : `${Math.floor((match.innings[1].balls - 1) / 4)}.${((match.innings[1].balls - 1) % 4) + 1}`} overs</p>
                     </div>
                   </>
                 )}
@@ -385,7 +595,7 @@ function LiveScore() {
               <h3 style={{ marginBottom: '1.5rem', color: '#667eea' }}>Score Input</h3>
 
               <div className="current-ball-info">
-                <p><strong>Current Over:</strong> {Math.floor(currentInnings.balls / 4) + 1}.{currentInnings.balls % 4}</p>
+                <p><strong>Current Over:</strong> {currentInnings.balls === 0 ? '0.0' : `${Math.floor((currentInnings.balls - 1) / 4)}.${((currentInnings.balls - 1) % 4) + 1}`}</p>
                 <p><strong>Innings:</strong> {match.currentInnings}</p>
                 {currentInnings.balls >= 24 && (
                   <div style={{
@@ -409,7 +619,7 @@ function LiveScore() {
               </div>
 
               {/* Batting Pair Selection */}
-              {(!battingPair.player1 || !battingPair.player2 || showPairSelection) && (
+              {showPairSelection && (
                 <div style={{
                   background: 'linear-gradient(135deg, #fdbb2d, #f59e0b)',
                   padding: '1.5rem',
@@ -420,6 +630,37 @@ function LiveScore() {
                   <h4 style={{ color: '#1a2a6c', marginBottom: '1rem', fontWeight: 'bold' }}>
                     Select Batting Pair (2 Overs)
                   </h4>
+
+                  {/* Player Status Overview */}
+                  <div style={{
+                    background: 'rgba(255,255,255,0.9)',
+                    padding: '0.75rem',
+                    borderRadius: '5px',
+                    marginBottom: '1rem',
+                    fontSize: '0.85rem'
+                  }}>
+                    <strong>Team Status:</strong>
+                    <div style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.25rem' }}>
+                      {battingTeamPlayers.map(player => {
+                        const status = getPlayerBattingStatus(player._id, true);
+                        const isCompleted = hasPlayerCompletedOvers(player._id);
+                        return (
+                          <div key={player._id} style={{
+                            color: isCompleted ? '#6c757d' : '#000',
+                            textDecoration: isCompleted ? 'line-through' : 'none'
+                          }}>
+                            {player.name}{status}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#666' }}>
+                      🟢 Available &nbsp;&nbsp;
+                      🟡 Batted &nbsp;&nbsp;
+                      🔴 <s>Completed</s>
+                    </div>
+                  </div>
+
                   <div className="form-group">
                     <label className="form-label">Batsman 1</label>
                     <select
@@ -428,12 +669,21 @@ function LiveScore() {
                       onChange={(e) => setBattingPair({...battingPair, player1: e.target.value})}
                     >
                       <option value="">Select Player 1</option>
-                      {battingTeamPlayers.map(player => (
-                        <option key={player._id} value={player._id}>
-                          {player.name}
-                        </option>
-                      ))}
+                      {availableBatsmen.map(player => {
+                        const status = getPlayerBattingStatus(player._id);
+                        const isDisabled = battingPair.player2 === player._id;
+                        return (
+                          <option key={player._id} value={player._id} disabled={isDisabled}>
+                            {player.name}{status}{isDisabled ? ' (Already selected as Player 2)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {availableBatsmen.length === 0 && (
+                      <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
+                        No available batsmen - all have completed their overs
+                      </small>
+                    )}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Batsman 2</label>
@@ -443,12 +693,21 @@ function LiveScore() {
                       onChange={(e) => setBattingPair({...battingPair, player2: e.target.value})}
                     >
                       <option value="">Select Player 2</option>
-                      {battingTeamPlayers.map(player => (
-                        <option key={player._id} value={player._id}>
-                          {player.name}
-                        </option>
-                      ))}
+                      {availableBatsmen.map(player => {
+                        const status = getPlayerBattingStatus(player._id);
+                        const isDisabled = battingPair.player1 === player._id;
+                        return (
+                          <option key={player._id} value={player._id} disabled={isDisabled}>
+                            {player.name}{status}{isDisabled ? ' (Already selected as Player 1)' : ''}
+                          </option>
+                        );
+                      })}
                     </select>
+                    {availableBatsmen.length === 0 && (
+                      <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
+                        No available batsmen - all have completed their overs
+                      </small>
+                    )}
                   </div>
                   <button
                     className="btn btn-success"
@@ -461,8 +720,12 @@ function LiveScore() {
               )}
 
               {/* Current Batting Pair Display */}
+              {battingPair.player1 && battingPair.player2 && !showPairSelection && (() => {
+                console.log('Rendering Current Pair - Player1:', battingPair.player1, 'Player2:', battingPair.player2, 'Striker:', striker);
+                return null;
+              })()}
               {battingPair.player1 && battingPair.player2 && !showPairSelection && (
-                <div style={{
+                <div key={`${battingPair.player1}-${battingPair.player2}-${striker}`} style={{
                   background: 'linear-gradient(135deg, #10b981, #34d399)',
                   padding: '1rem',
                   borderRadius: '10px',
@@ -471,42 +734,45 @@ function LiveScore() {
                   border: '2px solid #059669'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <strong style={{ fontSize: '1.1rem' }}>Current Pair:</strong>
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <span style={{
-                          background: striker === battingPair.player1 ? '#fdbb2d' : 'rgba(255,255,255,0.3)',
+                      <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <div style={{
+                          background: striker === battingPair.player1 ? '#fdbb2d' : 'rgba(255,255,255,0.4)',
                           color: striker === battingPair.player1 ? '#000' : '#fff',
-                          padding: '0.3rem 0.6rem',
+                          padding: '0.5rem 0.8rem',
                           borderRadius: '5px',
-                          marginRight: '0.5rem',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
+                          display: 'inline-block',
+                          minWidth: '120px',
+                          border: striker === battingPair.player1 ? '2px solid #f59e0b' : '2px solid rgba(255,255,255,0.5)'
                         }}>
-                          {battingTeamPlayers.find(p => p._id === battingPair.player1)?.name}
-                          {striker === battingPair.player1 && ' ⭐'}
-                        </span>
-                        <span style={{
-                          background: striker === battingPair.player2 ? '#fdbb2d' : 'rgba(255,255,255,0.3)',
+                          {battingTeamPlayers.find(p => p._id === battingPair.player1)?.name || 'Player 1'}
+                        </div>
+                        <div style={{
+                          background: striker === battingPair.player2 ? '#fdbb2d' : 'rgba(255,255,255,0.4)',
                           color: striker === battingPair.player2 ? '#000' : '#fff',
-                          padding: '0.3rem 0.6rem',
+                          padding: '0.5rem 0.8rem',
                           borderRadius: '5px',
-                          fontWeight: 'bold'
+                          fontWeight: 'bold',
+                          display: 'inline-block',
+                          minWidth: '120px',
+                          border: striker === battingPair.player2 ? '2px solid #f59e0b' : '2px solid rgba(255,255,255,0.5)'
                         }}>
-                          {battingTeamPlayers.find(p => p._id === battingPair.player2)?.name}
-                          {striker === battingPair.player2 && ' ⭐'}
-                        </span>
+                          {battingTeamPlayers.find(p => p._id === battingPair.player2)?.name || 'Player 2'}
+                        </div>
                       </div>
                     </div>
                     <button
                       className="btn btn-primary"
                       onClick={() => setShowPairSelection(true)}
-                      style={{ padding: '0.5rem 1rem' }}
+                      style={{ padding: '0.5rem 1rem', marginLeft: '1rem' }}
                     >
                       Change Pair
                     </button>
                   </div>
-                  <div style={{ marginTop: '0.5rem', fontSize: '0.9rem', opacity: 0.9 }}>
-                    ⭐ = On Strike | Overs {Math.floor(currentInnings.balls / 4) - pairStartOver}/2 completed
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.9rem', opacity: 0.9 }}>
+                    Gold = On Strike | Overs {Math.floor(currentInnings.balls / 4) - pairStartOver}/2 completed
                   </div>
                 </div>
               )}
@@ -519,12 +785,21 @@ function LiveScore() {
                   onChange={(e) => setCurrentBowler(e.target.value)}
                 >
                   <option value="">Select Bowler</option>
-                  {bowlingTeamPlayers.map(player => (
-                    <option key={player._id} value={player._id}>
-                      {player.name}
-                    </option>
-                  ))}
+                  {availableBowlers.map(player => {
+                    const oversCompleted = getBowlerOvers(player._id);
+                    const oversRemaining = maxOversPerBowler - oversCompleted;
+                    return (
+                      <option key={player._id} value={player._id}>
+                        {player.name} ({oversRemaining} over{oversRemaining !== 1 ? 's' : ''} remaining)
+                      </option>
+                    );
+                  })}
                 </select>
+                {availableBowlers.length === 0 && (
+                  <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
+                    No available bowlers - all have completed their 2 overs
+                  </small>
+                )}
               </div>
 
               {/* YYC Quick Scoring Buttons */}
@@ -570,6 +845,13 @@ function LiveScore() {
                     style={{ padding: '1rem', fontSize: '0.95rem' }}
                   >
                     Ceiling<br/>2 + runs
+                  </button>
+                  <button
+                    className="btn btn-info"
+                    onClick={() => handleQuickScore('ceiling_backwall')}
+                    style={{ padding: '1rem', fontSize: '0.95rem', background: 'linear-gradient(135deg, #0891b2, #06b6d4)', color: 'white' }}
+                  >
+                    Ceiling + Back Wall<br/>4 runs
                   </button>
                   <button
                     className="btn btn-primary"
@@ -698,7 +980,6 @@ function LiveScore() {
                     <th>4s</th>
                     <th>6s</th>
                     <th>SR</th>
-                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -710,7 +991,6 @@ function LiveScore() {
                       <td>{batting.fours}</td>
                       <td>{batting.sixes}</td>
                       <td>{batting.strikeRate}</td>
-                      <td>{batting.isOut ? batting.howOut : 'Not Out'}</td>
                     </tr>
                   ))}
                 </tbody>

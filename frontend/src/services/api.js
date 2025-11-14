@@ -41,6 +41,7 @@ export const matchAPI = {
   startMatch: (id, data) => api.post(`/matches/${id}/start`, data),
   updateBall: (id, data) => api.post(`/matches/${id}/ball`, data),
   getLiveMatches: () => api.get('/matches/live'),
+  restartMatch: (id) => api.post(`/matches/${id}/restart`),
 };
 
 export default api;
