@@ -40,8 +40,18 @@ export const matchAPI = {
   delete: (id) => api.delete(`/matches/${id}`),
   startMatch: (id, data) => api.post(`/matches/${id}/start`, data),
   updateBall: (id, data) => api.post(`/matches/${id}/ball`, data),
+  undoLastBall: (id) => api.delete(`/matches/${id}/ball/last`),
   getLiveMatches: () => api.get('/matches/live'),
   restartMatch: (id) => api.post(`/matches/${id}/restart`),
+};
+
+// Group APIs
+export const groupAPI = {
+  getAll: () => api.get('/groups'),
+  getById: (id) => api.get(`/groups/${id}`),
+  create: (data) => api.post('/groups', data),
+  update: (id, data) => api.put(`/groups/${id}`, data),
+  delete: (id) => api.delete(`/groups/${id}`),
 };
 
 export default api;

@@ -5,6 +5,7 @@ import './App.css';
 // Import pages
 import Dashboard from './pages/Dashboard';
 import Teams from './pages/Teams';
+import Groups from './pages/Groups';
 import Matches from './pages/Matches';
 import LiveScore from './pages/LiveScore';
 import Standings from './pages/Standings';
@@ -21,6 +22,7 @@ function App() {
           <ul className="navbar-nav">
             <li><Link to="/" className="nav-link">Dashboard</Link></li>
             <li><Link to="/teams" className="nav-link">Teams</Link></li>
+            <li><Link to="/groups" className="nav-link">Groups</Link></li>
             <li><Link to="/matches" className="nav-link">Matches</Link></li>
             <li><Link to="/standings" className="nav-link">Standings</Link></li>
             <li><Link to="/top-performers" className="nav-link">Top Performers</Link></li>
@@ -30,6 +32,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/teams" element={<Teams />} />
+          <Route path="/groups" element={<Groups />} />
           <Route path="/matches" element={<Matches />} />
           <Route path="/match/:id" element={<LiveScore />} />
           <Route path="/standings" element={<Standings />} />

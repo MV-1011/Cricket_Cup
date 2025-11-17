@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { playerAPI } from '../services/api';
+import * as XLSX from 'xlsx';
 
 function TopPerformers() {
   const [batsmen, setBatsmen] = useState([]);
@@ -11,24 +12,97 @@ function TopPerformers() {
     fetchAllPlayers();
   }, []);
 
+  const exportToExcel = (data, filename, sheetName) => {
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
+  };
+
+  const exportBatsmen = () => {
+    const data = batsmen.map((player, index) => ({
+      Rank: index + 1,
+      Player: player.name,
+      Team: player.team?.shortName || 'N/A',
+      Innings: player.battingStats.innings,
+      Runs: player.battingStats.runs,
+      Highest: player.battingStats.highestScore,
+      Average: player.battingStats.average,
+      'Strike Rate': player.battingStats.strikeRate,
+      '4s': player.battingStats.fours,
+      '6s': player.battingStats.sixes
+    }));
+    exportToExcel(data, 'Batsmen_Rankings', 'Batsmen');
+  };
+
+  const exportBowlers = () => {
+    const data = bowlers.map((player, index) => ({
+      Rank: index + 1,
+      Player: player.name,
+      Team: player.team?.shortName || 'N/A',
+      Innings: player.bowlingStats.innings,
+      Wickets: player.bowlingStats.wickets,
+      Overs: player.bowlingStats.overs.toFixed(1),
+      Runs: player.bowlingStats.runsConceded,
+      Average: player.bowlingStats.average,
+      Economy: player.bowlingStats.economy
+    }));
+    exportToExcel(data, 'Bowlers_Rankings', 'Bowlers');
+  };
+
+  const exportAllRounders = () => {
+    const data = allRounders.map((player, index) => ({
+      Rank: index + 1,
+      Player: player.name,
+      Team: player.team?.shortName || 'N/A',
+      Runs: player.battingStats.runs,
+      'Batting Avg': player.battingStats.average,
+      SR: player.battingStats.strikeRate,
+      Wickets: player.bowlingStats.wickets,
+      'Bowling Avg': player.bowlingStats.average,
+      Economy: player.bowlingStats.economy,
+      Score: (parseFloat(player.battingStats.average) - parseFloat(player.bowlingStats.economy)).toFixed(2)
+    }));
+    exportToExcel(data, 'AllRounders_Rankings', 'All-Rounders');
+  };
+
   const fetchAllPlayers = async () => {
     try {
       const response = await playerAPI.getAll();
       const players = response.data;
 
-      // Filter by role
-      const batsmenList = players.filter(p => p.role === 'Batsman' && p.battingStats.innings > 0)
-        .sort((a, b) => b.battingStats.runs - a.battingStats.runs);
-
-      const bowlersList = players.filter(p => p.role === 'Bowler' && p.bowlingStats.innings > 0)
-        .sort((a, b) => b.bowlingStats.wickets - a.bowlingStats.wickets);
-
-      const allRoundersList = players.filter(p => p.role === 'All-rounder' && (p.battingStats.innings > 0 || p.bowlingStats.innings > 0))
+      // BATSMEN: Ranked by Batting Average (Higher is better)
+      const batsmenList = players
+        .filter(p => p.role === 'Batsman' && p.battingStats.innings > 0)
         .sort((a, b) => {
-          // Sort all-rounders by a combination of runs and wickets
-          const scoreA = (a.battingStats.runs * 2) + (a.bowlingStats.wickets * 20);
-          const scoreB = (b.battingStats.runs * 2) + (b.bowlingStats.wickets * 20);
-          return scoreB - scoreA;
+          const avgA = parseFloat(a.battingStats.average) || 0;
+          const avgB = parseFloat(b.battingStats.average) || 0;
+          return avgB - avgA; // Descending order
+        });
+
+      // BOWLERS: Ranked by Economy Rate (Lower is better)
+      const bowlersList = players
+        .filter(p => p.role === 'Bowler' && p.bowlingStats.innings > 0)
+        .sort((a, b) => {
+          const econA = parseFloat(a.bowlingStats.economy) || 999;
+          const econB = parseFloat(b.bowlingStats.economy) || 999;
+          return econA - econB; // Ascending order (lower economy is better)
+        });
+
+      // ALL-ROUNDERS: Ranked by Simple Formula (Average - Economy)
+      const allRoundersList = players
+        .filter(p => p.role === 'All-rounder' &&
+               (p.battingStats.innings > 0 || p.bowlingStats.innings > 0))
+        .sort((a, b) => {
+          const batAvgA = parseFloat(a.battingStats.average) || 0;
+          const econA = parseFloat(a.bowlingStats.economy) || 10;
+          const scoreA = batAvgA - econA;
+
+          const batAvgB = parseFloat(b.battingStats.average) || 0;
+          const econB = parseFloat(b.bowlingStats.economy) || 10;
+          const scoreB = batAvgB - econB;
+
+          return scoreB - scoreA; // Descending order (higher score is better)
         });
 
       setBatsmen(batsmenList);
@@ -65,7 +139,23 @@ function TopPerformers() {
 
       {/* Batsmen Standings */}
       <div className="card">
-        <div className="card-header">🏏 Batsmen Standings</div>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            🏏 Batsmen Standings
+            <span style={{ fontSize: '0.9rem', fontWeight: 'normal', marginLeft: '1rem', color: '#6b7280' }}>
+              (Ranked by Batting Average)
+            </span>
+          </div>
+          {batsmen.length > 0 && (
+            <button
+              onClick={exportBatsmen}
+              className="btn btn-success"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+            >
+              📊 Export to Excel
+            </button>
+          )}
+        </div>
         {batsmen.length > 0 ? (
           <table className="table">
             <thead>
@@ -98,9 +188,9 @@ function TopPerformers() {
                   <td><strong>{player.name}</strong></td>
                   <td>{player.team?.shortName || 'N/A'}</td>
                   <td>{player.battingStats.innings}</td>
-                  <td><strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>{player.battingStats.runs}</strong></td>
+                  <td>{player.battingStats.runs}</td>
                   <td>{player.battingStats.highestScore}</td>
-                  <td>{player.battingStats.average}</td>
+                  <td><strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>{player.battingStats.average}</strong></td>
                   <td>{player.battingStats.strikeRate}</td>
                   <td>{player.battingStats.fours}</td>
                   <td>{player.battingStats.sixes}</td>
@@ -117,7 +207,23 @@ function TopPerformers() {
 
       {/* Bowlers Standings */}
       <div className="card">
-        <div className="card-header">⚡ Bowlers Standings</div>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            ⚡ Bowlers Standings
+            <span style={{ fontSize: '0.9rem', fontWeight: 'normal', marginLeft: '1rem', color: '#6b7280' }}>
+              (Ranked by Economy Rate - Lower is Better)
+            </span>
+          </div>
+          {bowlers.length > 0 && (
+            <button
+              onClick={exportBowlers}
+              className="btn btn-success"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+            >
+              📊 Export to Excel
+            </button>
+          )}
+        </div>
         {bowlers.length > 0 ? (
           <table className="table">
             <thead>
@@ -149,11 +255,11 @@ function TopPerformers() {
                   <td><strong>{player.name}</strong></td>
                   <td>{player.team?.shortName || 'N/A'}</td>
                   <td>{player.bowlingStats.innings}</td>
-                  <td><strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>{player.bowlingStats.wickets}</strong></td>
+                  <td>{player.bowlingStats.wickets}</td>
                   <td>{player.bowlingStats.overs.toFixed(1)}</td>
                   <td>{player.bowlingStats.runsConceded}</td>
                   <td>{player.bowlingStats.average}</td>
-                  <td>{player.bowlingStats.economy}</td>
+                  <td><strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{player.bowlingStats.economy}</strong></td>
                 </tr>
               ))}
             </tbody>
@@ -167,7 +273,23 @@ function TopPerformers() {
 
       {/* All-Rounders Standings */}
       <div className="card">
-        <div className="card-header">⭐ All-Rounders Standings</div>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            ⭐ All-Rounders Standings
+            <span style={{ fontSize: '0.9rem', fontWeight: 'normal', marginLeft: '1rem', color: '#6b7280' }}>
+              (Ranked by Batting Avg - Economy)
+            </span>
+          </div>
+          {allRounders.length > 0 && (
+            <button
+              onClick={exportAllRounders}
+              className="btn btn-success"
+              style={{ padding: '0.5rem 1rem', fontSize: '0.9rem' }}
+            >
+              📊 Export to Excel
+            </button>
+          )}
+        </div>
         {allRounders.length > 0 ? (
           <table className="table">
             <thead>
@@ -176,11 +298,12 @@ function TopPerformers() {
                 <th>Player</th>
                 <th>Team</th>
                 <th>Runs</th>
-                <th>Avg</th>
+                <th>Bat Avg</th>
                 <th>SR</th>
                 <th>Wickets</th>
-                <th>Bowling Avg</th>
+                <th>Bowl Avg</th>
                 <th>Econ</th>
+                <th>Score</th>
               </tr>
             </thead>
             <tbody>
@@ -198,12 +321,17 @@ function TopPerformers() {
                   </td>
                   <td><strong>{player.name}</strong></td>
                   <td>{player.team?.shortName || 'N/A'}</td>
-                  <td><strong style={{ color: '#b21f1f' }}>{player.battingStats.runs}</strong></td>
+                  <td>{player.battingStats.runs}</td>
                   <td>{player.battingStats.average}</td>
                   <td>{player.battingStats.strikeRate}</td>
-                  <td><strong style={{ color: '#1a2a6c' }}>{player.bowlingStats.wickets}</strong></td>
+                  <td>{player.bowlingStats.wickets}</td>
                   <td>{player.bowlingStats.average}</td>
                   <td>{player.bowlingStats.economy}</td>
+                  <td>
+                    <strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>
+                      {(parseFloat(player.battingStats.average) - parseFloat(player.bowlingStats.economy)).toFixed(2)}
+                    </strong>
+                  </td>
                 </tr>
               ))}
             </tbody>

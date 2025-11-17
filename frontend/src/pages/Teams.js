@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { teamAPI, playerAPI } from '../services/api';
+import { teamAPI, playerAPI, groupAPI } from '../services/api';
 
 function Teams() {
   const [teams, setTeams] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     shortName: '',
-    logo: ''
+    logo: '',
+    group: ''
   });
   const [editingId, setEditingId] = useState(null);
   const [expandedTeamId, setExpandedTeamId] = useState(null);
@@ -22,6 +24,7 @@ function Teams() {
 
   useEffect(() => {
     fetchTeams();
+    fetchGroups();
   }, []);
 
   const fetchTeams = async () => {
@@ -35,6 +38,15 @@ function Teams() {
     }
   };
 
+  const fetchGroups = async () => {
+    try {
+      const response = await groupAPI.getAll();
+      setGroups(response.data);
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -43,7 +55,7 @@ function Teams() {
       } else {
         await teamAPI.create(formData);
       }
-      setFormData({ name: '', shortName: '', logo: '' });
+      setFormData({ name: '', shortName: '', logo: '', group: groups.length > 0 ? groups[0].name : '' });
       setEditingId(null);
       setShowForm(false);
       fetchTeams();
@@ -194,6 +206,27 @@ function Teams() {
                 value={formData.logo}
                 onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
               />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Group</label>
+              <select
+                className="form-control"
+                value={formData.group}
+                onChange={(e) => setFormData({ ...formData, group: e.target.value })}
+                required
+              >
+                <option value="">Select Group</option>
+                {groups.map(group => (
+                  <option key={group._id} value={group.name}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+              {groups.length === 0 && (
+                <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
+                  No groups available. Please create a group first.
+                </small>
+              )}
             </div>
             <button type="submit" className="btn btn-success">
               {editingId ? 'Update Team' : 'Create Team'}

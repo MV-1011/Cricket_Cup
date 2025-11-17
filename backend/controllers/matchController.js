@@ -26,7 +26,11 @@ export const getMatchById = async (req, res) => {
       .populate('innings.battingScorecard.player', 'name')
       .populate('innings.bowlingScorecard.player', 'name')
       .populate('innings.ballByBall.bowler', 'name')
-      .populate('innings.ballByBall.batsman', 'name');
+      .populate('innings.ballByBall.batsman', 'name')
+      .populate('currentBattingPair.player1', 'name')
+      .populate('currentBattingPair.player2', 'name')
+      .populate('currentStriker', 'name')
+      .populate('currentBowler', 'name');
 
     if (!match) {
       return res.status(404).json({ message: 'Match not found' });
@@ -128,7 +132,7 @@ export const updateBallByBall = async (req, res) => {
       return res.status(404).json({ message: 'Match not found' });
     }
 
-    const { bowler, batsman, runs, extras, extraType, isWicket, wicketType, dismissedPlayer, boundaryType, additionalRuns } = req.body;
+    const { bowler, batsman, runs, extras, extraType, isWicket, wicketType, dismissedPlayer, boundaryType, additionalRuns, currentBattingPair, currentStriker, pairStartOver } = req.body;
     const currentInnings = match.innings[match.currentInnings - 1];
 
     // Sanitize empty strings to null for ObjectId fields
@@ -297,8 +301,8 @@ export const updateBallByBall = async (req, res) => {
 
     // Count fours and sixes based on boundary type (only if not out)
     if (!isWicket) {
-      if (boundaryType === 'straight_wall_ground') currentInnings.battingScorecard[batsmanIndex].fours += 1;
-      if (boundaryType === 'straight_wall_air') currentInnings.battingScorecard[batsmanIndex].sixes += 1;
+      if (boundaryType === 'four') currentInnings.battingScorecard[batsmanIndex].fours += 1;
+      if (boundaryType === 'six') currentInnings.battingScorecard[batsmanIndex].sixes += 1;
     }
 
     // YYC Rule: When wicket, deduct 4 runs from batsman's score
@@ -449,6 +453,23 @@ export const updateBallByBall = async (req, res) => {
       balls: b.balls,
       overs: b.overs
     })));
+
+    // Save current match state for persistence (batting pair, striker, bowler, pair start over)
+    if (currentBattingPair) {
+      match.currentBattingPair = {
+        player1: currentBattingPair.player1 || null,
+        player2: currentBattingPair.player2 || null
+      };
+    }
+    if (currentStriker) {
+      match.currentStriker = currentStriker;
+    }
+    if (sanitizedBowler) {
+      match.currentBowler = sanitizedBowler;
+    }
+    if (pairStartOver !== undefined) {
+      match.pairStartOver = pairStartOver;
+    }
 
     await match.save();
 
@@ -637,6 +658,121 @@ export const restartMatch = async (req, res) => {
 
     await match.save();
     res.json({ message: 'Match restarted successfully', match });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Undo the last ball
+export const undoLastBall = async (req, res) => {
+  try {
+    const match = await Match.findById(req.params.id);
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+
+    const currentInnings = match.innings[match.currentInnings - 1];
+    if (!currentInnings || currentInnings.ballByBall.length === 0) {
+      return res.status(400).json({ message: 'No balls to undo' });
+    }
+
+    // Get the last ball
+    const lastBall = currentInnings.ballByBall[currentInnings.ballByBall.length - 1];
+
+    // Reverse the runs
+    currentInnings.runs -= lastBall.runs;
+
+    // Reverse extras
+    if (lastBall.extraType !== 'none') {
+      currentInnings.extras -= lastBall.extras;
+    }
+
+    // Reverse wicket
+    if (lastBall.isWicket) {
+      currentInnings.wickets -= 1;
+      // Find the dismissed batsman and restore their stats
+      const batsmanIndex = currentInnings.battingScorecard.findIndex(
+        b => b.player.toString() === lastBall.dismissedPlayer.toString()
+      );
+      if (batsmanIndex !== -1) {
+        currentInnings.battingScorecard[batsmanIndex].isOut = false;
+        currentInnings.battingScorecard[batsmanIndex].howOut = '';
+        currentInnings.battingScorecard[batsmanIndex].runs += 4; // Restore wicket penalty
+      }
+    }
+
+    // Reverse batsman stats
+    const batsmanIndex = currentInnings.battingScorecard.findIndex(
+      b => b.player.toString() === lastBall.batsman.toString()
+    );
+    if (batsmanIndex !== -1) {
+      const batsmanScore = currentInnings.battingScorecard[batsmanIndex];
+
+      // Only reverse ball count if it wasn't an extra (wide/noball in first 6 overs)
+      if (lastBall.extraType === 'none' || lastBall.isWicket) {
+        batsmanScore.balls -= 1;
+      }
+
+      // Reverse runs (but not if it was a wicket, as runs aren't added on wicket)
+      if (!lastBall.isWicket && lastBall.extraType === 'none') {
+        batsmanScore.runs -= lastBall.runs;
+      }
+
+      // Reverse fours/sixes
+      if (lastBall.boundaryType === 'four') batsmanScore.fours -= 1;
+      if (lastBall.boundaryType === 'six') batsmanScore.sixes -= 1;
+
+      // Recalculate strike rate
+      batsmanScore.strikeRate = batsmanScore.balls > 0
+        ? ((batsmanScore.runs / batsmanScore.balls) * 100).toFixed(2)
+        : 0;
+    }
+
+    // Reverse bowler stats
+    const bowlerIndex = currentInnings.bowlingScorecard.findIndex(
+      b => b.player.toString() === lastBall.bowler.toString()
+    );
+    if (bowlerIndex !== -1) {
+      const bowlerStats = currentInnings.bowlingScorecard[bowlerIndex];
+
+      // Only reverse ball count if it wasn't a re-bowled wide/noball
+      if (lastBall.extraType === 'none' || lastBall.isWicket) {
+        bowlerStats.balls -= 1;
+      }
+
+      // Reverse runs
+      if (!lastBall.isWicket) {
+        bowlerStats.runs -= lastBall.runs;
+      } else {
+        bowlerStats.runs += 4; // Restore the 4 runs deducted on wicket
+      }
+
+      // Reverse wickets
+      if (lastBall.isWicket) {
+        bowlerStats.wickets -= 1;
+      }
+
+      // Recalculate overs and economy
+      bowlerStats.overs = Math.floor(bowlerStats.balls / 4) + (bowlerStats.balls % 4) / 10;
+      bowlerStats.economy = bowlerStats.overs > 0
+        ? (bowlerStats.runs / Math.floor(bowlerStats.balls / 4)).toFixed(2)
+        : 0;
+    }
+
+    // Reverse ball count (only if not a re-bowled extra)
+    if (lastBall.extraType === 'none' || lastBall.isWicket) {
+      currentInnings.balls -= 1;
+      currentInnings.overs = Math.floor(currentInnings.balls / 4) + (currentInnings.balls % 4) / 10;
+    }
+
+    // Remove the ball from ballByBall array
+    currentInnings.ballByBall.pop();
+
+    // Mark the innings as modified
+    match.markModified('innings');
+
+    await match.save();
+    res.json({ message: 'Last ball undone successfully', match });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

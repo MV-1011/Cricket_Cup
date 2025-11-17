@@ -136,6 +136,29 @@ const matchSchema = new mongoose.Schema({
   maxOvers: {
     type: Number,
     default: 8
+  },
+  // Current match state (for persistence across reloads)
+  currentBattingPair: {
+    player1: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Player'
+    },
+    player2: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Player'
+    }
+  },
+  currentStriker: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Player'
+  },
+  currentBowler: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Player'
+  },
+  pairStartOver: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

@@ -21,6 +21,11 @@ const teamSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Player'
   }],
+  group: {
+    type: String,
+    default: '',
+    trim: true
+  },
   matchesPlayed: {
     type: Number,
     default: 0

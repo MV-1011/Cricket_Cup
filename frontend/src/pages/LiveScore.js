@@ -26,6 +26,7 @@ function LiveScore() {
   const [showPairSelection, setShowPairSelection] = useState(false);
   const [usedPairs, setUsedPairs] = useState([]); // Track used batting pairs
   const [lastBowler, setLastBowler] = useState(''); // Track last over's bowler
+  const [showBowlerChangePrompt, setShowBowlerChangePrompt] = useState(false);
 
   // Toss dialog states
   const [showTossDialog, setShowTossDialog] = useState(false);
@@ -66,6 +67,43 @@ function LiveScore() {
     console.log('Batting pair:', battingPair);
     console.log('Show pair selection:', showPairSelection);
   }, [striker, battingPair, showPairSelection]);
+
+  // Restore saved match state on load (batting pair, striker, bowler, pair start over)
+  useEffect(() => {
+    if (match && match.status === 'live') {
+      // Restore batting pair
+      if (match.currentBattingPair && match.currentBattingPair.player1 && match.currentBattingPair.player2) {
+        setBattingPair({
+          player1: match.currentBattingPair.player1._id || match.currentBattingPair.player1,
+          player2: match.currentBattingPair.player2._id || match.currentBattingPair.player2
+        });
+      }
+
+      // Restore striker
+      if (match.currentStriker) {
+        const strikerId = match.currentStriker._id || match.currentStriker;
+        setStriker(strikerId);
+        setCurrentBatsman(strikerId);
+      }
+
+      // Restore bowler
+      if (match.currentBowler) {
+        setCurrentBowler(match.currentBowler._id || match.currentBowler);
+      }
+
+      // Restore pair start over
+      if (match.pairStartOver !== undefined) {
+        setPairStartOver(match.pairStartOver);
+      }
+
+      console.log('Restored match state:', {
+        battingPair: match.currentBattingPair,
+        striker: match.currentStriker,
+        bowler: match.currentBowler,
+        pairStartOver: match.pairStartOver
+      });
+    }
+  }, [match]);
 
   const fetchPlayers = async () => {
     try {
@@ -316,7 +354,11 @@ function LiveScore() {
       wicketType: 'none',
       dismissedPlayer: null,
       boundaryType: 'none',
-      additionalRuns: 0
+      additionalRuns: 0,
+      // Add persistence data
+      currentBattingPair: battingPair,
+      currentStriker: striker,
+      pairStartOver: pairStartOver
     };
 
     // Set data based on quick score type
@@ -327,6 +369,46 @@ function LiveScore() {
       case '1': case '2': case '3':
         ballData.runs = parseInt(scoreType);
         break;
+      case '4':
+        ballData.runs = 4;
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 0;
+        break;
+      case '6':
+        ballData.runs = 6;
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 0;
+        break;
+      case '4+1':
+        ballData.runs = 5;
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 1;
+        break;
+      case '4+2':
+        ballData.runs = 6;
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 2;
+        break;
+      case '4+3':
+        ballData.runs = 7;
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 3;
+        break;
+      case '6+1':
+        ballData.runs = 7;
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 1;
+        break;
+      case '6+2':
+        ballData.runs = 8;
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 2;
+        break;
+      case '6+3':
+        ballData.runs = 9;
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 3;
+        break;
       case 'wide':
         ballData.extraType = 'wide';
         ballData.extras = 4;
@@ -334,38 +416,6 @@ function LiveScore() {
       case 'noball':
         ballData.extraType = 'noball';
         ballData.extras = 4;
-        break;
-      case 'straight_wall_air':
-        ballData.boundaryType = 'straight_wall_air';
-        ballData.additionalRuns = additionalRuns;
-        break;
-      case 'straight_wall_ground':
-        ballData.boundaryType = 'straight_wall_ground';
-        ballData.additionalRuns = additionalRuns;
-        break;
-      case 'ceiling':
-        ballData.boundaryType = 'ceiling';
-        ballData.additionalRuns = additionalRuns;
-        break;
-      case 'ceiling_backwall':
-        ballData.boundaryType = 'ceiling_backwall';
-        ballData.additionalRuns = 0; // Fixed 4 runs, no additional
-        break;
-      case 'side_wall_air':
-        ballData.boundaryType = 'side_wall_air';
-        ballData.additionalRuns = additionalRuns;
-        break;
-      case 'side_wall_ground':
-        ballData.boundaryType = 'side_wall_ground';
-        ballData.additionalRuns = additionalRuns;
-        break;
-      case 'net_air':
-        ballData.boundaryType = 'net_air';
-        ballData.additionalRuns = additionalRuns;
-        break;
-      case 'net_ground':
-        ballData.boundaryType = 'net_ground';
-        ballData.additionalRuns = additionalRuns;
         break;
       case 'wicket':
         ballData.isWicket = true;
@@ -421,6 +471,10 @@ function LiveScore() {
       if (newBall === 0) {
         // Over just completed, save this bowler as last bowler
         setLastBowler(validBowler);
+        // Show prompt to change bowler
+        setShowBowlerChangePrompt(true);
+        // Clear current bowler to force selection
+        setCurrentBowler('');
       }
 
       // Check if pair's 2 overs are complete
@@ -436,6 +490,21 @@ function LiveScore() {
     } catch (error) {
       console.error('Error updating ball:', error);
       alert('Error updating score: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleResetBall = async () => {
+    if (!window.confirm('Are you sure you want to undo the last ball? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await matchAPI.undoLastBall(id);
+      fetchMatch();
+      alert('Last ball has been successfully undone');
+    } catch (error) {
+      console.error('Error undoing ball:', error);
+      alert('Error undoing ball: ' + (error.response?.data?.message || error.message));
     }
   };
 
@@ -762,17 +831,58 @@ function LiveScore() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => setShowPairSelection(true)}
-                      style={{ padding: '0.5rem 1rem', marginLeft: '1rem' }}
-                    >
-                      Change Pair
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '1rem' }}>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => setShowPairSelection(true)}
+                        style={{ padding: '0.5rem 1rem' }}
+                      >
+                        Change Pair
+                      </button>
+                      <button
+                        className="btn btn-warning"
+                        onClick={() => {
+                          // Reset current pair without marking as used
+                          setBattingPair({ player1: '', player2: '' });
+                          setStriker('');
+                          setCurrentBatsman('');
+                          setShowPairSelection(true);
+                        }}
+                        style={{ padding: '0.5rem 1rem', backgroundColor: '#f59e0b', color: 'white', border: 'none' }}
+                        title="Reset and select new pair without marking current as completed"
+                      >
+                        Reset Pair
+                      </button>
+                    </div>
                   </div>
                   <div style={{ marginTop: '0.75rem', fontSize: '0.9rem', opacity: 0.9 }}>
                     Gold = On Strike | Overs {Math.floor(currentInnings.balls / 4) - pairStartOver}/2 completed
                   </div>
+                </div>
+              )}
+
+              {/* Bowler Change Prompt */}
+              {showBowlerChangePrompt && (
+                <div style={{
+                  background: 'linear-gradient(135deg, #10b981, #059669)',
+                  padding: '1.5rem',
+                  borderRadius: '10px',
+                  marginBottom: '1.5rem',
+                  border: '3px solid #1a2a6c'
+                }}>
+                  <h4 style={{ color: 'white', marginBottom: '1rem', fontWeight: 'bold' }}>
+                    ⚡ Over Completed! Please Select New Bowler
+                  </h4>
+                  <p style={{ color: 'white', marginBottom: '1rem', fontSize: '0.95rem' }}>
+                    The over is complete. A bowler cannot bowl 2 consecutive overs. Please select a different bowler.
+                  </p>
+                  <button
+                    className="btn btn-light"
+                    onClick={() => setShowBowlerChangePrompt(false)}
+                    style={{ fontWeight: 'bold' }}
+                  >
+                    OK, I'll Select a New Bowler
+                  </button>
                 </div>
               )}
 
@@ -781,7 +891,11 @@ function LiveScore() {
                 <select
                   className="form-select"
                   value={currentBowler}
-                  onChange={(e) => setCurrentBowler(e.target.value)}
+                  onChange={(e) => {
+                    setCurrentBowler(e.target.value);
+                    // Close the prompt when bowler is selected
+                    setShowBowlerChangePrompt(false);
+                  }}
                 >
                   <option value="">Select Bowler</option>
                   {availableBowlers.map(player => {
@@ -801,98 +915,74 @@ function LiveScore() {
                 )}
               </div>
 
-              {/* YYC Quick Scoring Buttons */}
+              {/* YYC Scoring Buttons */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label className="form-label" style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Quick Score</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  <button className="btn btn-secondary" onClick={() => handleQuickScore('dot')} style={{ padding: '1rem', fontSize: '1.1rem' }}>
-                    Dot Ball
+                {/* Row 1: Basic Runs */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button className="btn btn-secondary" onClick={() => handleQuickScore('dot')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                    Dot
                   </button>
-                  <button className="btn btn-primary" onClick={() => handleQuickScore('1')} style={{ padding: '1rem', fontSize: '1.1rem' }}>
-                    1 Run
+                  <button className="btn btn-primary" onClick={() => handleQuickScore('1')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                    1
                   </button>
-                  <button className="btn btn-primary" onClick={() => handleQuickScore('2')} style={{ padding: '1rem', fontSize: '1.1rem' }}>
-                    2 Runs
+                  <button className="btn btn-primary" onClick={() => handleQuickScore('2')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                    2
                   </button>
-                  <button className="btn btn-primary" onClick={() => handleQuickScore('3')} style={{ padding: '1rem', fontSize: '1.1rem' }}>
-                    3 Runs
+                  <button className="btn btn-primary" onClick={() => handleQuickScore('3')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                    3
+                  </button>
+                  <button className="btn btn-success" onClick={() => handleQuickScore('4')} style={{ padding: '0.8rem', fontSize: '1rem', fontWeight: 'bold' }}>
+                    4
+                  </button>
+                  <button className="btn btn-success" onClick={() => handleQuickScore('6')} style={{ padding: '0.8rem', fontSize: '1rem', fontWeight: 'bold' }}>
+                    6
                   </button>
                 </div>
-              </div>
-
-              {/* YYC Boundary Buttons */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label" style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>YYC Boundaries</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {/* Row 2: 4 + runs combinations */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <button
-                    className="btn btn-success"
-                    onClick={() => handleQuickScore('straight_wall_air')}
-                    style={{ padding: '1rem', fontSize: '0.95rem', background: 'linear-gradient(135deg, #059669, #10b981)' }}
+                    className="btn btn-info"
+                    onClick={() => handleQuickScore('4+1')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0891b2', color: 'white' }}
                   >
-                    Straight Wall (Air)<br/>6 + runs
-                  </button>
-                  <button
-                    className="btn btn-success"
-                    onClick={() => handleQuickScore('straight_wall_ground')}
-                    style={{ padding: '1rem', fontSize: '0.95rem', background: 'linear-gradient(135deg, #0d9488, #14b8a6)' }}
-                  >
-                    Straight Wall (Ground)<br/>4 + runs
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={() => handleQuickScore('ceiling')}
-                    style={{ padding: '1rem', fontSize: '0.95rem' }}
-                  >
-                    Ceiling<br/>2 + runs
+                    4+1
                   </button>
                   <button
                     className="btn btn-info"
-                    onClick={() => handleQuickScore('ceiling_backwall')}
-                    style={{ padding: '1rem', fontSize: '0.95rem', background: 'linear-gradient(135deg, #0891b2, #06b6d4)', color: 'white' }}
+                    onClick={() => handleQuickScore('4+2')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0891b2', color: 'white' }}
                   >
-                    Ceiling + Back Wall<br/>4 runs
+                    4+2
                   </button>
                   <button
-                    className="btn btn-primary"
-                    onClick={() => handleQuickScore('side_wall_air')}
-                    style={{ padding: '1rem', fontSize: '0.95rem' }}
+                    className="btn btn-info"
+                    onClick={() => handleQuickScore('4+3')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0891b2', color: 'white' }}
                   >
-                    Side Wall (Air)<br/>2 + runs
+                    4+3
                   </button>
                   <button
-                    className="btn btn-primary"
-                    onClick={() => handleQuickScore('side_wall_ground')}
-                    style={{ padding: '1rem', fontSize: '0.95rem' }}
+                    className="btn btn-warning"
+                    onClick={() => handleQuickScore('6+1')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
                   >
-                    Side Wall (Ground)<br/>1 + runs
+                    6+1
                   </button>
                   <button
-                    className="btn btn-primary"
-                    onClick={() => handleQuickScore('net_air')}
-                    style={{ padding: '1rem', fontSize: '0.95rem' }}
+                    className="btn btn-warning"
+                    onClick={() => handleQuickScore('6+2')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
                   >
-                    Net/Curtain (Air)<br/>2 + runs
+                    6+2
                   </button>
                   <button
-                    className="btn btn-primary"
-                    onClick={() => handleQuickScore('net_ground')}
-                    style={{ padding: '1rem', fontSize: '0.95rem' }}
+                    className="btn btn-warning"
+                    onClick={() => handleQuickScore('6+3')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
                   >
-                    Net/Curtain (Ground)<br/>1 + runs
+                    6+3
                   </button>
-                </div>
-
-                <div className="form-group" style={{ marginTop: '1rem' }}>
-                  <label className="form-label">Additional Runs (if any)</label>
-                  <input
-                    type="number"
-                    className="form-control"
-                    value={additionalRuns}
-                    onChange={(e) => setAdditionalRuns(parseInt(e.target.value) || 0)}
-                    min="0"
-                    max="3"
-                    placeholder="Extra runs by running"
-                  />
                 </div>
               </div>
 
@@ -957,6 +1047,21 @@ function LiveScore() {
                 >
                   WICKET
                 </button>
+              </div>
+
+              {/* Reset Ball Button */}
+              <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '2px solid #dee2e6' }}>
+                <button
+                  className="btn btn-warning"
+                  onClick={handleResetBall}
+                  style={{ width: '100%', padding: '1rem', fontSize: '1rem', fontWeight: 'bold', background: '#f59e0b', color: 'white', border: 'none' }}
+                  disabled={!currentInnings || currentInnings.ballByBall.length === 0}
+                >
+                  Reset Last Ball
+                </button>
+                <small style={{ display: 'block', marginTop: '0.5rem', color: '#6c757d', textAlign: 'center' }}>
+                  Undo the last ball if entered incorrectly
+                </small>
               </div>
             </div>
           </>

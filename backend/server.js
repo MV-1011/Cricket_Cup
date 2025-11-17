@@ -11,6 +11,7 @@ import connectDB from './config/db.js';
 import teamRoutes from './routes/teamRoutes.js';
 import playerRoutes from './routes/playerRoutes.js';
 import matchRoutes from './routes/matchRoutes.js';
+import groupRoutes from './routes/groupRoutes.js';
 
 // Get __dirname equivalent in ES6
 const __filename = fileURLToPath(import.meta.url);
@@ -47,6 +48,7 @@ app.use((req, res, next) => {
 app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/matches', matchRoutes);
+app.use('/api/groups', groupRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
