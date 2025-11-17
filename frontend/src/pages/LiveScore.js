@@ -15,7 +15,6 @@ function LiveScore() {
   // Score input states
   const [currentBatsman, setCurrentBatsman] = useState('');
   const [currentBowler, setCurrentBowler] = useState('');
-  const [additionalRuns, setAdditionalRuns] = useState(0);
   const [wicketType, setWicketType] = useState('none');
   const [dismissedPlayer, setDismissedPlayer] = useState('');
 
@@ -281,7 +280,6 @@ function LiveScore() {
       setShowPairSelection(false);
       setUsedPairs([]);
       setPairStartOver(0);
-      setAdditionalRuns(0);
       setWicketType('none');
       setDismissedPlayer('');
       setLastBowler('');
@@ -462,7 +460,6 @@ function LiveScore() {
       }
 
       // Reset form
-      setAdditionalRuns(0);
       setWicketType('none');
       setDismissedPlayer('');
 

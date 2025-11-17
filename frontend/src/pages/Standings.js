@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { teamAPI } from '../services/api';
 
 function Standings() {
-  const [teams, setTeams] = useState([]);
   const [groupedTeams, setGroupedTeams] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -14,7 +13,6 @@ function Standings() {
     try {
       const response = await teamAPI.getStandings();
       const teamsData = response.data;
-      setTeams(teamsData);
 
       // Debug: Log teams and their groups
       console.log('Teams data:', teamsData.map(t => ({ name: t.name, group: t.group })));
