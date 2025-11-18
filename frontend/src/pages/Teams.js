@@ -69,7 +69,8 @@ function Teams() {
     setFormData({
       name: team.name,
       shortName: team.shortName,
-      logo: team.logo
+      logo: team.logo,
+      group: team.group || ''
     });
     setEditingId(team._id);
     setShowForm(true);
@@ -168,7 +169,7 @@ function Teams() {
             onClick={() => {
               setShowForm(!showForm);
               setEditingId(null);
-              setFormData({ name: '', shortName: '', logo: '' });
+              setFormData({ name: '', shortName: '', logo: '', group: '' });
             }}
           >
             {showForm ? 'Cancel' : 'Add Team'}
@@ -240,7 +241,7 @@ function Teams() {
               No teams yet. Click "Add Team" to create your first team!
             </p>
           ) : null}
-          {teams.map(team => (
+          {teams.map((team, index) => (
             <div key={team._id} style={{
               marginBottom: '1.5rem',
               border: expandedTeamId === team._id ? '3px solid #1a2a6c' : '2px solid #e5e7eb',
@@ -263,6 +264,15 @@ function Teams() {
                 borderBottom: expandedTeamId === team._id ? '3px solid #fdbb2d' : 'none'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', flex: 1 }} onClick={() => handleExpandTeam(team._id)}>
+                  <div style={{
+                    fontSize: '1.5rem',
+                    fontWeight: '700',
+                    color: expandedTeamId === team._id ? 'white' : '#6b7280',
+                    minWidth: '40px',
+                    textAlign: 'center'
+                  }}>
+                    {index + 1}
+                  </div>
                   <div>
                     <strong style={{ fontSize: '1.3rem' }}>{team.name}</strong>
                     <span style={{ marginLeft: '1rem', opacity: 0.8 }}>({team.shortName})</span>
