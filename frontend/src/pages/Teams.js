@@ -8,7 +8,6 @@ function Teams() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    shortName: '',
     logo: '',
     group: ''
   });
@@ -17,6 +16,7 @@ function Teams() {
   const [players, setPlayers] = useState([]);
   const [showPlayerForm, setShowPlayerForm] = useState(false);
   const [playerFormData, setPlayerFormData] = useState({
+    sid: '',
     name: '',
     role: 'Batsman'
   });
@@ -55,7 +55,7 @@ function Teams() {
       } else {
         await teamAPI.create(formData);
       }
-      setFormData({ name: '', shortName: '', logo: '', group: groups.length > 0 ? groups[0].name : '' });
+      setFormData({ name: '', logo: '', group: groups.length > 0 ? groups[0].name : '' });
       setEditingId(null);
       setShowForm(false);
       fetchTeams();
@@ -68,7 +68,6 @@ function Teams() {
   const handleEdit = (team) => {
     setFormData({
       name: team.name,
-      shortName: team.shortName,
       logo: team.logo,
       group: team.group || ''
     });
@@ -124,9 +123,12 @@ function Teams() {
         await playerAPI.create(playerData);
       }
 
-      setPlayerFormData({ name: '', role: 'Batsman' });
+      setPlayerFormData({ sid: '', name: '', role: 'Batsman' });
       setEditingPlayerId(null);
-      setShowPlayerForm(false);
+      // Only close form when editing, keep open for adding new players
+      if (editingPlayerId) {
+        setShowPlayerForm(false);
+      }
       await fetchTeamPlayers(expandedTeamId);
       fetchTeams();
     } catch (error) {
@@ -137,6 +139,7 @@ function Teams() {
 
   const handleEditPlayer = (player) => {
     setPlayerFormData({
+      sid: player.sid || '',
       name: player.name,
       role: player.role
     });
@@ -169,7 +172,7 @@ function Teams() {
             onClick={() => {
               setShowForm(!showForm);
               setEditingId(null);
-              setFormData({ name: '', shortName: '', logo: '', group: '' });
+              setFormData({ name: '', logo: '', group: '' });
             }}
           >
             {showForm ? 'Cancel' : 'Add Team'}
@@ -189,17 +192,6 @@ function Teams() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Short Name (3 letters)</label>
-              <input
-                type="text"
-                className="form-control"
-                value={formData.shortName}
-                onChange={(e) => setFormData({ ...formData, shortName: e.target.value.toUpperCase() })}
-                maxLength="3"
-                required
-              />
-            </div>
-            <div className="form-group">
               <label className="form-label">Logo URL (optional)</label>
               <input
                 type="text"
@@ -209,25 +201,19 @@ function Teams() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Group</label>
+              <label className="form-label">Group (optional)</label>
               <select
                 className="form-control"
                 value={formData.group}
                 onChange={(e) => setFormData({ ...formData, group: e.target.value })}
-                required
               >
-                <option value="">Select Group</option>
+                <option value="">No Group</option>
                 {groups.map(group => (
                   <option key={group._id} value={group.name}>
                     {group.name}
                   </option>
                 ))}
               </select>
-              {groups.length === 0 && (
-                <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
-                  No groups available. Please create a group first.
-                </small>
-              )}
             </div>
             <button type="submit" className="btn btn-success">
               {editingId ? 'Update Team' : 'Create Team'}
@@ -275,7 +261,6 @@ function Teams() {
                   </div>
                   <div>
                     <strong style={{ fontSize: '1.3rem' }}>{team.name}</strong>
-                    <span style={{ marginLeft: '1rem', opacity: 0.8 }}>({team.shortName})</span>
                     {expandedTeamId !== team._id && (
                       <span style={{
                         marginLeft: '1rem',
@@ -335,12 +320,16 @@ function Teams() {
                     <button
                       className="btn btn-success"
                       onClick={() => {
-                        setShowPlayerForm(!showPlayerForm);
-                        setEditingPlayerId(null);
-                        setPlayerFormData({ name: '', role: 'Batsman' });
+                        if (!showPlayerForm) {
+                          setShowPlayerForm(true);
+                          setEditingPlayerId(null);
+                          setPlayerFormData({ sid: '', name: '', role: 'Batsman' });
+                        } else {
+                          setShowPlayerForm(false);
+                        }
                       }}
                     >
-                      {showPlayerForm ? 'Cancel' : '+ Add Player'}
+                      {showPlayerForm ? 'Done' : '+ Add Player'}
                     </button>
                   </div>
 
@@ -352,7 +341,18 @@ function Teams() {
                       borderRadius: '10px',
                       border: '2px solid rgba(26, 42, 108, 0.2)'
                     }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">SID</label>
+                          <input
+                            type="number"
+                            className="form-control"
+                            value={playerFormData.sid}
+                            onChange={(e) => setPlayerFormData({ ...playerFormData, sid: e.target.value })}
+                            required
+                            placeholder="Player ID"
+                          />
+                        </div>
                         <div className="form-group">
                           <label className="form-label">Player Name</label>
                           <input
@@ -387,7 +387,7 @@ function Teams() {
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>#</th>
+                          <th>SID</th>
                           <th>Name</th>
                           <th>Role</th>
                           <th>Batting Avg</th>
@@ -396,9 +396,9 @@ function Teams() {
                         </tr>
                       </thead>
                       <tbody>
-                        {players.map((player, index) => (
+                        {players.map((player) => (
                           <tr key={player._id}>
-                            <td>{index + 1}</td>
+                            <td><strong>{player.sid}</strong></td>
                             <td><strong>{player.name}</strong></td>
                             <td>{player.role}</td>
                             <td>{player.battingStats?.average || '0.00'}</td>

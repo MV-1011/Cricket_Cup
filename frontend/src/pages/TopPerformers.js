@@ -23,7 +23,7 @@ function TopPerformers() {
     const data = batsmen.map((player, index) => ({
       Rank: index + 1,
       Player: player.name,
-      Team: player.team?.shortName || 'N/A',
+      Team: player.team?.name || 'N/A',
       Innings: player.battingStats.innings,
       Runs: player.battingStats.runs,
       Highest: player.battingStats.highestScore,
@@ -39,7 +39,7 @@ function TopPerformers() {
     const data = bowlers.map((player, index) => ({
       Rank: index + 1,
       Player: player.name,
-      Team: player.team?.shortName || 'N/A',
+      Team: player.team?.name || 'N/A',
       Innings: player.bowlingStats.innings,
       Wickets: player.bowlingStats.wickets,
       Overs: player.bowlingStats.overs.toFixed(1),
@@ -54,7 +54,7 @@ function TopPerformers() {
     const data = allRounders.map((player, index) => ({
       Rank: index + 1,
       Player: player.name,
-      Team: player.team?.shortName || 'N/A',
+      Team: player.team?.name || 'N/A',
       Runs: player.battingStats.runs,
       'Batting Avg': player.battingStats.average,
       SR: player.battingStats.strikeRate,
@@ -186,7 +186,7 @@ function TopPerformers() {
                     </strong>
                   </td>
                   <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.shortName || 'N/A'}</td>
+                  <td>{player.team?.name || 'N/A'}</td>
                   <td>{player.battingStats.innings}</td>
                   <td>{player.battingStats.runs}</td>
                   <td>{player.battingStats.highestScore}</td>
@@ -253,7 +253,7 @@ function TopPerformers() {
                     </strong>
                   </td>
                   <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.shortName || 'N/A'}</td>
+                  <td>{player.team?.name || 'N/A'}</td>
                   <td>{player.bowlingStats.innings}</td>
                   <td>{player.bowlingStats.wickets}</td>
                   <td>{player.bowlingStats.overs.toFixed(1)}</td>
@@ -320,7 +320,7 @@ function TopPerformers() {
                     </strong>
                   </td>
                   <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.shortName || 'N/A'}</td>
+                  <td>{player.team?.name || 'N/A'}</td>
                   <td>{player.battingStats.runs}</td>
                   <td>{player.battingStats.average}</td>
                   <td>{player.battingStats.strikeRate}</td>

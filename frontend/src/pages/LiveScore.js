@@ -353,7 +353,7 @@ function LiveScore() {
       dismissedPlayer: null,
       boundaryType: 'none',
       additionalRuns: 0,
-      // Add persistence data
+      // Add persistence data - will be updated below with new striker
       currentBattingPair: battingPair,
       currentStriker: striker,
       pairStartOver: pairStartOver
@@ -415,6 +415,50 @@ function LiveScore() {
         ballData.extraType = 'noball';
         ballData.extras = 4;
         break;
+      // No Ball + Six + Additional Runs
+      case 'nb+6+1':
+        ballData.extraType = 'noball';
+        ballData.extras = 4; // No ball runs (goes to extras, not batsman)
+        ballData.runs = 7; // 6 + 1 (batsman's runs)
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 1;
+        break;
+      case 'nb+6+2':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 8; // 6 + 2
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 2;
+        break;
+      case 'nb+6+3':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 9; // 6 + 3
+        ballData.boundaryType = 'six';
+        ballData.additionalRuns = 3;
+        break;
+      // No Ball + Four + Additional Runs
+      case 'nb+4+1':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 5; // 4 + 1
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 1;
+        break;
+      case 'nb+4+2':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 6; // 4 + 2
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 2;
+        break;
+      case 'nb+4+3':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 7; // 4 + 3
+        ballData.boundaryType = 'four';
+        ballData.additionalRuns = 3;
+        break;
       case 'wicket':
         ballData.isWicket = true;
         ballData.wicketType = wicketType || 'bowled';
@@ -427,46 +471,62 @@ function LiveScore() {
         break;
     }
 
+    // Calculate new striker BEFORE API call so we can persist it
+    // Note: currentInnings already declared above
+    const newBallNumber = (currentInnings.balls + 1) % 4;
+    const isEndOfOver = newBallNumber === 0;
+
+    // Determine if strike should rotate
+    let shouldRotateForRuns = false;
+    if (ballData.isWicket) {
+      shouldRotateForRuns = true;
+    } else if (ballData.runs % 2 === 1) {
+      shouldRotateForRuns = true;
+    }
+
+    // Calculate the new striker after this ball
+    let newStriker = striker;
+
+    // First apply runs/wicket rotation
+    if (shouldRotateForRuns) {
+      newStriker = (newStriker === battingPair.player1) ? battingPair.player2 : battingPair.player1;
+    }
+
+    // Then apply end-of-over rotation
+    if (isEndOfOver) {
+      newStriker = (newStriker === battingPair.player1) ? battingPair.player2 : battingPair.player1;
+    }
+
+    // Update ballData with the NEW striker that should be persisted
+    ballData.currentStriker = newStriker;
+
+    console.log('Strike calculation:', {
+      runs: ballData.runs,
+      shouldRotateForRuns,
+      isEndOfOver,
+      oldStriker: striker,
+      newStriker
+    });
+
     try {
       console.log('Sending ball data:', ballData);
       await matchAPI.updateBall(id, ballData);
       console.log('Ball update response received');
 
-      const currentInnings = match.innings[match.currentInnings - 1];
-
-      // Rotate strike logic
-      // YYC Rules:
-      // 1. After wicket, swap striker (new batsman comes, non-striker faces next ball)
-      // 2. After odd runs (1, 3), swap striker
-      // 3. DO NOT swap on over end - striker continues
-
-      let shouldRotate = false;
-
-      // YYC Rule: Strike changes on wicket
-      if (ballData.isWicket) {
-        shouldRotate = true;
-      }
-      // Check for odd runs (1, 3)
-      else if (scoreType === '1' || scoreType === '3') {
-        shouldRotate = true;
-      }
-      // Check if boundary with odd additional runs
-      else if ((ballData.boundaryType !== 'none' && ballData.additionalRuns % 2 === 1)) {
-        shouldRotate = true;
-      }
-
-      if (shouldRotate) {
-        rotateStrike();
+      // Apply the strike rotation to local state
+      if (shouldRotateForRuns || isEndOfOver) {
+        setStriker(newStriker);
+        setCurrentBatsman(newStriker);
+        console.log('Strike updated to:', newStriker);
       }
 
       // Reset form
       setWicketType('none');
       setDismissedPlayer('');
 
-      // Update last bowler at the end of an over (when ball 4 is completed)
-      const newBall = (currentInnings.balls + 1) % 4;
-      if (newBall === 0) {
-        // Over just completed, save this bowler as last bowler
+      // Handle end of over
+      if (isEndOfOver) {
+        // Save this bowler as last bowler
         setLastBowler(validBowler);
         // Show prompt to change bowler
         setShowBowlerChangePrompt(true);
@@ -496,8 +556,77 @@ function LiveScore() {
     }
 
     try {
+      const currentInnings = match.innings[match.currentInnings - 1];
+      const ballByBall = currentInnings.ballByBall;
+
+      if (ballByBall.length === 0) {
+        alert('No balls to undo');
+        return;
+      }
+
+      // Get the last ball data before undoing
+      const lastBall = ballByBall[ballByBall.length - 1];
+      const currentBallInOver = currentInnings.balls % 4;
+
+      // Check if this was the first ball of a new over (meaning we just finished an over)
+      // If current balls ends at 0 mod 4, and we have balls, then last ball was end of over
+      const wasLastBallOfOver = currentBallInOver === 0 && currentInnings.balls > 0;
+
+      // If we're undoing the first ball of a new over, we need to restore the previous bowler
+      if (wasLastBallOfOver) {
+        // The lastBowler state has the bowler from the previous over
+        // We need to restore currentBowler to the bowler of the ball we're undoing
+        const bowlerOfUndoBall = lastBall.bowler._id || lastBall.bowler;
+        setCurrentBowler(bowlerOfUndoBall);
+        setShowBowlerChangePrompt(false);
+
+        // Clear lastBowler since we're going back to that over
+        setLastBowler('');
+      }
+
+      // Check if the last ball caused a strike rotation (odd runs, wicket, or end of over)
+      // If so, we need to rotate strike back
+      const lastBallRuns = lastBall.runs || 0;
+      const wasWicket = lastBall.isWicket;
+      const shouldReverseForRunsOrWicket = wasWicket || (lastBallRuns % 2 === 1);
+
       await matchAPI.undoLastBall(id);
-      fetchMatch();
+
+      // Reverse strike rotation
+      // Case 1: If this was the last ball of an over, strike was rotated at over end
+      if (wasLastBallOfOver) {
+        rotateStrike(); // Reverse the over-end rotation
+      }
+      // Case 2: If strike was rotated due to odd runs or wicket
+      if (shouldReverseForRunsOrWicket) {
+        rotateStrike();
+      }
+
+      // Check if this reset takes us back into a pair's 2-over window
+      // We need to restore the pair selection state if we go back before pair completion
+      const newBallCount = currentInnings.balls - 1;
+      const newOver = Math.floor(newBallCount / 4);
+
+      // If we were showing pair selection because the 2 overs were complete,
+      // and now we're back within the pair's overs, restore the pair
+      if (showPairSelection && match.currentBattingPair &&
+          match.currentBattingPair.player1 && match.currentBattingPair.player2) {
+        const savedPairStartOver = match.pairStartOver || 0;
+        if (newOver - savedPairStartOver < 2) {
+          // Restore the pair
+          setBattingPair({
+            player1: match.currentBattingPair.player1._id || match.currentBattingPair.player1,
+            player2: match.currentBattingPair.player2._id || match.currentBattingPair.player2
+          });
+          if (match.currentStriker) {
+            setStriker(match.currentStriker._id || match.currentStriker);
+            setCurrentBatsman(match.currentStriker._id || match.currentStriker);
+          }
+          setShowPairSelection(false);
+        }
+      }
+
+      await fetchMatch();
       alert('Last ball has been successfully undone');
     } catch (error) {
       console.error('Error undoing ball:', error);
@@ -638,7 +767,7 @@ function LiveScore() {
               <span className="live-badge">LIVE</span>
               <div className="score-display">
                 <div className="team-score">
-                  <h3>{match.innings[0].battingTeam === match.team1._id ? match.team1.shortName : match.team2.shortName}</h3>
+                  <h3>{match.innings[0].battingTeam === match.team1._id ? match.team1.name : match.team2.name}</h3>
                   <div className="score">{match.innings[0].runs}/{match.innings[0].wickets}</div>
                   <p>{match.innings[0].balls === 0 ? '0.0' : `${Math.floor((match.innings[0].balls - 1) / 4)}.${((match.innings[0].balls - 1) % 4) + 1}`} overs</p>
                 </div>
@@ -646,7 +775,7 @@ function LiveScore() {
                   <>
                     <div>vs</div>
                     <div className="team-score">
-                      <h3>{match.innings[1].battingTeam === match.team1._id ? match.team1.shortName : match.team2.shortName}</h3>
+                      <h3>{match.innings[1].battingTeam === match.team1._id ? match.team1.name : match.team2.name}</h3>
                       <div className="score">{match.innings[1].runs}/{match.innings[1].wickets}</div>
                       <p>{match.innings[1].balls === 0 ? '0.0' : `${Math.floor((match.innings[1].balls - 1) / 4)}.${((match.innings[1].balls - 1) % 4) + 1}`} overs</p>
                     </div>
@@ -979,6 +1108,51 @@ function LiveScore() {
                     style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
                   >
                     6+3
+                  </button>
+                </div>
+                {/* Row 3: No Ball + 4 + runs combinations */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  <button
+                    className="btn"
+                    onClick={() => handleQuickScore('nb+4+1')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0e7490', color: 'white' }}
+                  >
+                    NB+4+1
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => handleQuickScore('nb+4+2')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0e7490', color: 'white' }}
+                  >
+                    NB+4+2
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => handleQuickScore('nb+4+3')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0e7490', color: 'white' }}
+                  >
+                    NB+4+3
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => handleQuickScore('nb+6+1')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#d97706', color: 'white' }}
+                  >
+                    NB+6+1
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => handleQuickScore('nb+6+2')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#d97706', color: 'white' }}
+                  >
+                    NB+6+2
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => handleQuickScore('nb+6+3')}
+                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#d97706', color: 'white' }}
+                  >
+                    NB+6+3
                   </button>
                 </div>
               </div>

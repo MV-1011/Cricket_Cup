@@ -78,7 +78,7 @@ function Dashboard() {
               <h3>Match {match.matchNumber}</h3>
               <div className="score-display">
                 <div className="team-score">
-                  <h3>{match.team1?.shortName || 'Team 1'}</h3>
+                  <h3>{match.team1?.name || 'Team 1'}</h3>
                   <div className="score">
                     {match.innings[0] ? `${match.innings[0].runs}/${match.innings[0].wickets}` : '0/0'}
                   </div>
@@ -86,7 +86,7 @@ function Dashboard() {
                 </div>
                 <div>vs</div>
                 <div className="team-score">
-                  <h3>{match.team2?.shortName || 'Team 2'}</h3>
+                  <h3>{match.team2?.name || 'Team 2'}</h3>
                   <div className="score">
                     {match.innings[1] ? `${match.innings[1].runs}/${match.innings[1].wickets}` : 'Yet to bat'}
                   </div>

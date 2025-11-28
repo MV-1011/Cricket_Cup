@@ -54,4 +54,21 @@ export const groupAPI = {
   delete: (id) => api.delete(`/groups/${id}`),
 };
 
+// Tournament APIs
+export const tournamentAPI = {
+  getAll: () => api.get('/tournaments'),
+  getById: (id) => api.get(`/tournaments/${id}`),
+  create: (data) => api.post('/tournaments', data),
+  update: (id, data) => api.put(`/tournaments/${id}`, data),
+  delete: (id) => api.delete(`/tournaments/${id}`),
+  setupGroups: (id, data) => api.post(`/tournaments/${id}/groups/setup`, data),
+  generateGroupMatches: (id) => api.post(`/tournaments/${id}/groups/generate-matches`),
+  getAllGroupStandings: (id) => api.get(`/tournaments/${id}/groups/standings`),
+  getGroupStandings: (id, groupName) => api.get(`/tournaments/${id}/groups/${groupName}/standings`),
+  generateKnockoutBracket: (id) => api.post(`/tournaments/${id}/knockout/generate`),
+  updateKnockoutMatch: (id, knockoutId, data) => api.put(`/tournaments/${id}/knockout/${knockoutId}`, data),
+  updateGroupStandings: (matchId) => api.post(`/tournaments/match/${matchId}/update-standings`),
+  advanceKnockoutWinner: (matchId) => api.post(`/tournaments/match/${matchId}/advance-knockout`),
+};
+
 export default api;
