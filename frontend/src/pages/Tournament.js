@@ -30,28 +30,28 @@ function Tournament() {
   ]);
 
   useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [tournamentsRes, teamsRes] = await Promise.all([
+          tournamentAPI.getAll(),
+          teamAPI.getAll()
+        ]);
+        setTournaments(tournamentsRes.data);
+        setTeams(teamsRes.data);
+
+        // Auto-select if only one tournament exists
+        if (tournamentsRes.data.length === 1) {
+          const detailsRes = await tournamentAPI.getById(tournamentsRes.data[0]._id);
+          setSelectedTournament(detailsRes.data);
+        }
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        setLoading(false);
+      }
+    };
     fetchData();
   }, []);
-
-  const fetchData = async () => {
-    try {
-      const [tournamentsRes, teamsRes] = await Promise.all([
-        tournamentAPI.getAll(),
-        teamAPI.getAll()
-      ]);
-      setTournaments(tournamentsRes.data);
-      setTeams(teamsRes.data);
-
-      // Auto-select if only one tournament exists
-      if (tournamentsRes.data.length === 1) {
-        await fetchTournamentDetails(tournamentsRes.data[0]._id);
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setLoading(false);
-    }
-  };
 
   const fetchTournamentDetails = async (id) => {
     try {
