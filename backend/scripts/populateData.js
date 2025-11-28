@@ -16,9 +16,9 @@ async function populateData() {
 
     // Clear existing data (optional - comment out if you want to keep existing data)
     // await Group.deleteMany({});
-    await Team.deleteMany({});
-    await Player.deleteMany({});
-    await Match.deleteMany({});
+    // await Team.deleteMany({});
+    // await Player.deleteMany({});
+    // await Match.deleteMany({});
 
     // Create Groups (or use existing)
     console.log('Setting up groups...');
@@ -261,7 +261,18 @@ function generateBattingStats(players, totalRuns) {
 
 function generateBowlingStats(players, runsAgainst) {
   const bowlers = [];
-  const numBowlers = Math.min(4, players.length);
+
+  // Prioritize Bowlers and All-rounders for bowling
+  const bowlerPlayers = players.filter(p => p.role === 'Bowler' || p.role === 'All-rounder');
+  const selectedBowlers = bowlerPlayers.slice(0, 4);
+
+  // If we don't have 4 bowlers/all-rounders, fill with batsmen
+  if (selectedBowlers.length < 4) {
+    const batsmenPlayers = players.filter(p => p.role === 'Batsman');
+    selectedBowlers.push(...batsmenPlayers.slice(0, 4 - selectedBowlers.length));
+  }
+
+  const numBowlers = selectedBowlers.length;
   let runsDistributed = 0;
 
   for (let i = 0; i < numBowlers; i++) {
@@ -282,7 +293,7 @@ function generateBowlingStats(players, runsAgainst) {
     const totalBalls = (overs * 4) + balls;
 
     bowlers.push({
-      player: players[i]._id,
+      player: selectedBowlers[i]._id,
       overs,
       balls,
       runs,

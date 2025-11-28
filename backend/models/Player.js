@@ -1,6 +1,10 @@
 import mongoose from 'mongoose';
 
 const playerSchema = new mongoose.Schema({
+  sid: {
+    type: Number,
+    required: true
+  },
   name: {
     type: String,
     required: true,

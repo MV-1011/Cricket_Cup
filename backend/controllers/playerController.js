@@ -4,7 +4,7 @@ import Team from '../models/Team.js';
 // Get all players
 export const getAllPlayers = async (req, res) => {
   try {
-    const players = await Player.find().populate('team', 'name shortName');
+    const players = await Player.find().populate('team', 'name');
     res.json(players);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -85,7 +85,7 @@ export const getTopBatsmen = async (req, res) => {
   try {
     const limit = req.query.limit || 20;
     const players = await Player.find({ 'battingStats.innings': { $gt: 0 } })
-      .populate('team', 'name shortName')
+      .populate('team', 'name')
       .sort({ 'battingStats.runs': -1, 'battingStats.average': -1 })
       .limit(parseInt(limit));
     res.json(players);
@@ -99,7 +99,7 @@ export const getTopBowlers = async (req, res) => {
   try {
     const limit = req.query.limit || 20;
     const players = await Player.find({ 'bowlingStats.innings': { $gt: 0 } })
-      .populate('team', 'name shortName')
+      .populate('team', 'name')
       .sort({ 'bowlingStats.wickets': -1, 'bowlingStats.average': 1 })
       .limit(parseInt(limit));
     res.json(players);

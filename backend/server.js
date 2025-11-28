@@ -12,6 +12,7 @@ import teamRoutes from './routes/teamRoutes.js';
 import playerRoutes from './routes/playerRoutes.js';
 import matchRoutes from './routes/matchRoutes.js';
 import groupRoutes from './routes/groupRoutes.js';
+import tournamentRoutes from './routes/tournamentRoutes.js';
 
 // Get __dirname equivalent in ES6
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +50,7 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/players', playerRoutes);
 app.use('/api/matches', matchRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/tournaments', tournamentRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

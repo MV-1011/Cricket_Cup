@@ -7,12 +7,6 @@ const teamSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
-  shortName: {
-    type: String,
-    required: true,
-    maxlength: 3,
-    uppercase: true
-  },
   logo: {
     type: String,
     default: ''

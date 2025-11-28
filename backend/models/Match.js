@@ -34,7 +34,7 @@ const ballSchema = new mongoose.Schema({
     ref: 'Player',
     validate: objectIdValidator
   },
-  boundaryType: { type: String, enum: ['none', 'straight_wall_air', 'straight_wall_ground', 'ceiling', 'side_wall_air', 'side_wall_ground', 'net_air', 'net_ground'], default: 'none' },
+  boundaryType: { type: String, enum: ['none', 'four', 'six', 'straight_wall_air', 'straight_wall_ground', 'ceiling', 'side_wall_air', 'side_wall_ground', 'net_air', 'net_ground'], default: 'none' },
   additionalRuns: { type: Number, default: 0 }
 }, { _id: false });
 
@@ -83,6 +83,24 @@ const matchSchema = new mongoose.Schema({
     type: Number,
     required: true,
     unique: true
+  },
+  // Tournament context
+  tournament: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Tournament'
+  },
+  stage: {
+    type: String,
+    enum: ['group', 'quarterfinal', 'semifinal', 'final'],
+    default: 'group'
+  },
+  groupName: {
+    type: String, // "Group A", "Group B", etc. (for group stage matches)
+    default: ''
+  },
+  knockoutMatchId: {
+    type: String, // "QF1", "SF2", "FINAL" (for knockout matches)
+    default: ''
   },
   team1: {
     type: mongoose.Schema.Types.ObjectId,

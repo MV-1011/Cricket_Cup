@@ -6,9 +6,9 @@ import Player from '../models/Player.js';
 export const getAllMatches = async (req, res) => {
   try {
     const matches = await Match.find()
-      .populate('team1', 'name shortName')
-      .populate('team2', 'name shortName')
-      .populate('winner', 'name shortName')
+      .populate('team1', 'name')
+      .populate('team2', 'name')
+      .populate('winner', 'name')
       .sort({ date: -1 });
     res.json(matches);
   } catch (error) {
@@ -20,9 +20,9 @@ export const getAllMatches = async (req, res) => {
 export const getMatchById = async (req, res) => {
   try {
     const match = await Match.findById(req.params.id)
-      .populate('team1', 'name shortName')
-      .populate('team2', 'name shortName')
-      .populate('winner', 'name shortName')
+      .populate('team1', 'name')
+      .populate('team2', 'name')
+      .populate('winner', 'name')
       .populate('innings.battingScorecard.player', 'name')
       .populate('innings.bowlingScorecard.player', 'name')
       .populate('innings.ballByBall.bowler', 'name')
@@ -629,8 +629,8 @@ async function calculateMatchResult(match) {
 export const getLiveMatches = async (req, res) => {
   try {
     const matches = await Match.find({ status: 'live' })
-      .populate('team1', 'name shortName')
-      .populate('team2', 'name shortName');
+      .populate('team1', 'name')
+      .populate('team2', 'name');
     res.json(matches);
   } catch (error) {
     res.status(500).json({ message: error.message });

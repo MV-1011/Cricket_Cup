@@ -70,7 +70,7 @@ export const getStandings = async (req, res) => {
   try {
     const teams = await Team.find()
       .sort({ points: -1, netRunRate: -1 })
-      .select('name shortName group matchesPlayed matchesWon matchesLost points netRunRate');
+      .select('name group matchesPlayed matchesWon matchesLost points netRunRate');
     res.json(teams);
   } catch (error) {
     res.status(500).json({ message: error.message });
