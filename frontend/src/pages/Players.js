@@ -8,9 +8,7 @@ function Players() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    team: '',
-    role: 'Batsman',
-    jerseyNumber: ''
+    team: ''
   });
   const [editingId, setEditingId] = useState(null);
 
@@ -47,7 +45,7 @@ function Players() {
       } else {
         await playerAPI.create(formData);
       }
-      setFormData({ name: '', team: '', role: 'Batsman', jerseyNumber: '' });
+      setFormData({ name: '', team: '' });
       setEditingId(null);
       setShowForm(false);
       fetchPlayers();
@@ -60,9 +58,7 @@ function Players() {
   const handleEdit = (player) => {
     setFormData({
       name: player.name,
-      team: player.team?._id || '',
-      role: player.role,
-      jerseyNumber: player.jerseyNumber
+      team: player.team?._id || ''
     });
     setEditingId(player._id);
     setShowForm(true);
@@ -94,7 +90,7 @@ function Players() {
             onClick={() => {
               setShowForm(!showForm);
               setEditingId(null);
-              setFormData({ name: '', team: '', role: 'Batsman', jerseyNumber: '' });
+              setFormData({ name: '', team: '' });
             }}
           >
             {showForm ? 'Cancel' : 'Add Player'}
@@ -129,31 +125,6 @@ function Players() {
                 ))}
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label">Role</label>
-              <select
-                className="form-select"
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                required
-              >
-                <option value="Batsman">Batsman</option>
-                <option value="Bowler">Bowler</option>
-                <option value="All-rounder">All-rounder</option>
-                <option value="Wicket-keeper">Wicket-keeper</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Jersey Number</label>
-              <input
-                type="number"
-                className="form-control"
-                value={formData.jerseyNumber}
-                onChange={(e) => setFormData({ ...formData, jerseyNumber: e.target.value })}
-                min="1"
-                max="99"
-              />
-            </div>
             <button type="submit" className="btn btn-success">
               {editingId ? 'Update Player' : 'Create Player'}
             </button>
@@ -165,8 +136,6 @@ function Players() {
             <tr>
               <th>Name</th>
               <th>Team</th>
-              <th>Role</th>
-              <th>Jersey #</th>
               <th>Batting Avg</th>
               <th>Bowling Avg</th>
               <th>Actions</th>
@@ -175,7 +144,7 @@ function Players() {
           <tbody>
             {players.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
                   No players found. Click "Add Player" to create your first player.
                 </td>
               </tr>
@@ -184,8 +153,6 @@ function Players() {
                 <tr key={player._id}>
                   <td><strong>{player.name}</strong></td>
                   <td>{player.team?.name || 'N/A'}</td>
-                  <td>{player.role}</td>
-                  <td>{player.jerseyNumber}</td>
                   <td>{player.battingStats.average || '0.00'}</td>
                   <td>{player.bowlingStats.average || '0.00'}</td>
                   <td>

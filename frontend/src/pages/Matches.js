@@ -1,24 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { matchAPI, teamAPI } from '../services/api';
+import { matchAPI, teamAPI, tournamentAPI } from '../services/api';
 
 function Matches() {
   const [matches, setMatches] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    matchNumber: '',
+    tournament: '',
+    matchType: 'group',
+    groupName: 'Group A',
+    knockoutMatchId: 'QF1',
     team1: '',
     team2: '',
-    date: '',
-    time: '',
-    maxOvers: 8
+    matchNumber: '',
+    date: ''
   });
 
   useEffect(() => {
     fetchMatches();
     fetchTeams();
+    fetchTournaments();
   }, []);
 
   const fetchMatches = async () => {
@@ -41,23 +45,59 @@ function Matches() {
     }
   };
 
+  const fetchTournaments = async () => {
+    try {
+      const response = await tournamentAPI.getAll();
+      setTournaments(response.data);
+    } catch (error) {
+      console.error('Error fetching tournaments:', error);
+    }
+  };
+
+  const getSelectedTournament = () => {
+    return tournaments.find(t => t._id === formData.tournament);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.tournament) {
+      alert('Please select a tournament');
+      return;
+    }
+    if (!formData.team1 || !formData.team2) {
+      alert('Please select both teams');
+      return;
+    }
+    if (formData.team1 === formData.team2) {
+      alert('Teams must be different');
+      return;
+    }
     try {
-      await matchAPI.create(formData);
+      await tournamentAPI.addMatch(formData.tournament, {
+        matchType: formData.matchType,
+        team1: formData.team1,
+        team2: formData.team2,
+        groupName: formData.groupName,
+        knockoutMatchId: formData.knockoutMatchId,
+        matchNumber: formData.matchNumber ? parseInt(formData.matchNumber) : null,
+        date: formData.date || null
+      });
       setFormData({
-        matchNumber: '',
+        tournament: '',
+        matchType: 'group',
+        groupName: 'Group A',
+        knockoutMatchId: 'QF1',
         team1: '',
         team2: '',
-        date: '',
-        time: '',
-        maxOvers: 8
+        matchNumber: '',
+        date: ''
       });
       setShowForm(false);
       fetchMatches();
+      alert('Match added successfully!');
     } catch (error) {
       console.error('Error creating match:', error);
-      alert('Error creating match');
+      alert(error.response?.data?.message || 'Error creating match');
     }
   };
 
@@ -102,7 +142,7 @@ function Matches() {
             className="btn btn-primary"
             onClick={() => {
               setShowForm(!showForm);
-              setFormData({ matchNumber: '', team1: '', team2: '', date: '', time: '', maxOvers: 8 });
+              setFormData({ tournament: '', matchType: 'group', groupName: 'Group A', knockoutMatchId: 'QF1', team1: '', team2: '', matchNumber: '', date: '' });
             }}
           >
             {showForm ? 'Cancel' : 'Add Match'}
@@ -112,13 +152,95 @@ function Matches() {
         {showForm && (
           <form onSubmit={handleSubmit} style={{ marginBottom: '2rem', padding: '1rem', background: '#f9fafb', borderRadius: '5px' }}>
             <div className="form-group">
-              <label className="form-label">Match Number</label>
+              <label className="form-label">Tournament</label>
+              <select
+                className="form-select"
+                value={formData.tournament}
+                onChange={(e) => setFormData({ ...formData, tournament: e.target.value })}
+                required
+              >
+                <option value="">Select Tournament</option>
+                {tournaments.map(tournament => (
+                  <option key={tournament._id} value={tournament._id}>
+                    {tournament.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Match Type</label>
+              <select
+                className="form-select"
+                value={formData.matchType}
+                onChange={(e) => setFormData({ ...formData, matchType: e.target.value })}
+                required
+              >
+                <option value="group">Group Match</option>
+                <option value="quarterfinal">Quarter Final</option>
+                <option value="semifinal">Semi Final</option>
+                <option value="final">Final</option>
+              </select>
+            </div>
+            {formData.matchType === 'group' && getSelectedTournament() && (
+              <div className="form-group">
+                <label className="form-label">Group</label>
+                <select
+                  className="form-select"
+                  value={formData.groupName}
+                  onChange={(e) => setFormData({ ...formData, groupName: e.target.value })}
+                  required
+                >
+                  {getSelectedTournament().groups?.map(group => (
+                    <option key={group.name} value={group.name}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {(formData.matchType === 'quarterfinal' || formData.matchType === 'semifinal') && (
+              <div className="form-group">
+                <label className="form-label">Match Slot</label>
+                <select
+                  className="form-select"
+                  value={formData.knockoutMatchId}
+                  onChange={(e) => setFormData({ ...formData, knockoutMatchId: e.target.value })}
+                  required
+                >
+                  {formData.matchType === 'quarterfinal' ? (
+                    <>
+                      <option value="QF1">QF1</option>
+                      <option value="QF2">QF2</option>
+                      <option value="QF3">QF3</option>
+                      <option value="QF4">QF4</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="SF1">SF1</option>
+                      <option value="SF2">SF2</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Match Number (optional - auto-generated if empty)</label>
               <input
                 type="number"
                 className="form-control"
                 value={formData.matchNumber}
                 onChange={(e) => setFormData({ ...formData, matchNumber: e.target.value })}
-                required
+                placeholder="Leave empty for auto-generated"
+                min="1"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Scheduled Date (optional)</label>
+              <input
+                type="date"
+                className="form-control"
+                value={formData.date}
+                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               />
             </div>
             <div className="form-group">
@@ -152,38 +274,6 @@ function Matches() {
                   </option>
                 ))}
               </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Date</label>
-              <input
-                type="date"
-                className="form-control"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Time</label>
-              <input
-                type="time"
-                className="form-control"
-                value={formData.time}
-                onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Max Overs</label>
-              <input
-                type="number"
-                className="form-control"
-                value={formData.maxOvers}
-                onChange={(e) => setFormData({ ...formData, maxOvers: e.target.value })}
-                min="1"
-                max="20"
-                required
-              />
             </div>
             <button type="submit" className="btn btn-success">
               Create Match

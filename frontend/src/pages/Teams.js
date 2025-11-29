@@ -17,8 +17,7 @@ function Teams() {
   const [showPlayerForm, setShowPlayerForm] = useState(false);
   const [playerFormData, setPlayerFormData] = useState({
     sid: '',
-    name: '',
-    role: 'Batsman'
+    name: ''
   });
   const [editingPlayerId, setEditingPlayerId] = useState(null);
 
@@ -123,7 +122,7 @@ function Teams() {
         await playerAPI.create(playerData);
       }
 
-      setPlayerFormData({ sid: '', name: '', role: 'Batsman' });
+      setPlayerFormData({ sid: '', name: '' });
       setEditingPlayerId(null);
       // Only close form when editing, keep open for adding new players
       if (editingPlayerId) {
@@ -140,8 +139,7 @@ function Teams() {
   const handleEditPlayer = (player) => {
     setPlayerFormData({
       sid: player.sid || '',
-      name: player.name,
-      role: player.role
+      name: player.name
     });
     setEditingPlayerId(player._id);
     setShowPlayerForm(true);
@@ -323,7 +321,7 @@ function Teams() {
                         if (!showPlayerForm) {
                           setShowPlayerForm(true);
                           setEditingPlayerId(null);
-                          setPlayerFormData({ sid: '', name: '', role: 'Batsman' });
+                          setPlayerFormData({ sid: '', name: '' });
                         } else {
                           setShowPlayerForm(false);
                         }
@@ -363,19 +361,6 @@ function Teams() {
                             required
                           />
                         </div>
-                        <div className="form-group">
-                          <label className="form-label">Role</label>
-                          <select
-                            className="form-select"
-                            value={playerFormData.role}
-                            onChange={(e) => setPlayerFormData({ ...playerFormData, role: e.target.value })}
-                            required
-                          >
-                            <option value="Batsman">Batsman</option>
-                            <option value="Bowler">Bowler</option>
-                            <option value="All-rounder">All-rounder</option>
-                          </select>
-                        </div>
                       </div>
                       <button type="submit" className="btn btn-success" style={{ marginTop: '1rem' }}>
                         {editingPlayerId ? 'Update Player' : 'Add Player'}
@@ -389,7 +374,6 @@ function Teams() {
                         <tr>
                           <th>SID</th>
                           <th>Name</th>
-                          <th>Role</th>
                           <th>Batting Avg</th>
                           <th>Bowling Avg</th>
                           <th>Actions</th>
@@ -400,7 +384,6 @@ function Teams() {
                           <tr key={player._id}>
                             <td><strong>{player.sid}</strong></td>
                             <td><strong>{player.name}</strong></td>
-                            <td>{player.role}</td>
                             <td>{player.battingStats?.average || '0.00'}</td>
                             <td>{player.bowlingStats?.average || '0.00'}</td>
                             <td>

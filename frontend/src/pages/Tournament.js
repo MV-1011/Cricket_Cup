@@ -11,6 +11,16 @@ function Tournament() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showGroupSetup, setShowGroupSetup] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [editingMatch, setEditingMatch] = useState(null);
+  const [matchEditData, setMatchEditData] = useState({ team1: '', team2: '' });
+  const [showAddMatch, setShowAddMatch] = useState(false);
+  const [newMatchData, setNewMatchData] = useState({
+    matchType: 'group',
+    team1: '',
+    team2: '',
+    groupName: 'Group A',
+    knockoutMatchId: 'QF1'
+  });
 
   // Create form state
   const [formData, setFormData] = useState({
@@ -132,6 +142,176 @@ function Tournament() {
     } catch (error) {
       console.error('Error generating knockout:', error);
       alert(error.response?.data?.message || 'Failed to generate knockout bracket');
+    }
+  };
+
+  const handleRegenerateGroupMatches = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm('This will DELETE all existing group matches and regenerate them. All match data will be lost. Continue?')) return;
+
+    try {
+      const response = await tournamentAPI.regenerateGroupMatches(selectedTournament._id);
+      await fetchTournamentDetails(selectedTournament._id);
+      alert(`Regenerated ${response.data.matches.length} group stage matches!`);
+    } catch (error) {
+      console.error('Error regenerating matches:', error);
+      alert(error.response?.data?.message || 'Failed to regenerate matches');
+    }
+  };
+
+  const handleRegenerateKnockout = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm('This will DELETE all existing knockout matches and regenerate them based on current group standings. Continue?')) return;
+
+    try {
+      await tournamentAPI.regenerateKnockoutBracket(selectedTournament._id);
+      await fetchTournamentDetails(selectedTournament._id);
+      alert('Knockout bracket regenerated successfully!');
+    } catch (error) {
+      console.error('Error regenerating knockout:', error);
+      alert(error.response?.data?.message || 'Failed to regenerate knockout bracket');
+    }
+  };
+
+  const handleClearKnockout = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm('This will DELETE all knockout matches (QF, SF, Final) and clear the knockout bracket. Continue?')) return;
+
+    try {
+      await tournamentAPI.clearKnockout(selectedTournament._id);
+      await fetchTournamentDetails(selectedTournament._id);
+      alert('Knockout bracket cleared successfully!');
+    } catch (error) {
+      console.error('Error clearing knockout:', error);
+      alert(error.response?.data?.message || 'Failed to clear knockout bracket');
+    }
+  };
+
+  const handleDeleteTournament = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm(`Are you sure you want to delete "${selectedTournament.name}"? This will also delete all associated matches. This action cannot be undone!`)) return;
+
+    try {
+      await tournamentAPI.delete(selectedTournament._id);
+      setTournaments(tournaments.filter(t => t._id !== selectedTournament._id));
+      setSelectedTournament(null);
+      alert('Tournament deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting tournament:', error);
+      alert(error.response?.data?.message || 'Failed to delete tournament');
+    }
+  };
+
+  const handleResetTournament = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm(`Are you sure you want to reset "${selectedTournament.name}"? This will DELETE ALL MATCHES (group stage and knockout) and reset all standings. The groups and teams will be preserved. This action cannot be undone!`)) return;
+
+    try {
+      await tournamentAPI.resetTournament(selectedTournament._id);
+      await fetchTournamentDetails(selectedTournament._id);
+      alert('Tournament reset successfully! All matches have been removed.');
+    } catch (error) {
+      console.error('Error resetting tournament:', error);
+      alert(error.response?.data?.message || 'Failed to reset tournament');
+    }
+  };
+
+  const handleResetGroupStage = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm('Are you sure you want to reset the GROUP STAGE? This will DELETE all group matches and reset all standings to zero. This action cannot be undone!')) return;
+
+    try {
+      await tournamentAPI.resetGroupStage(selectedTournament._id);
+      await fetchTournamentDetails(selectedTournament._id);
+      alert('Group stage reset successfully! All group matches have been removed.');
+    } catch (error) {
+      console.error('Error resetting group stage:', error);
+      alert(error.response?.data?.message || 'Failed to reset group stage');
+    }
+  };
+
+  const handleResetKnockoutStage = async () => {
+    if (!selectedTournament) return;
+
+    if (!window.confirm('Are you sure you want to reset the KNOCKOUT STAGE? This will DELETE all knockout matches (QF, SF, Final) and clear the bracket. This action cannot be undone!')) return;
+
+    try {
+      await tournamentAPI.resetKnockoutStage(selectedTournament._id);
+      await fetchTournamentDetails(selectedTournament._id);
+      alert('Knockout stage reset successfully! All knockout matches have been removed.');
+    } catch (error) {
+      console.error('Error resetting knockout stage:', error);
+      alert(error.response?.data?.message || 'Failed to reset knockout stage');
+    }
+  };
+
+  const handleAddMatch = async () => {
+    if (!selectedTournament) return;
+    if (!newMatchData.team1 || !newMatchData.team2) {
+      alert('Please select both teams');
+      return;
+    }
+    if (newMatchData.team1 === newMatchData.team2) {
+      alert('Teams must be different');
+      return;
+    }
+
+    try {
+      await tournamentAPI.addMatch(selectedTournament._id, newMatchData);
+      await fetchTournamentDetails(selectedTournament._id);
+      setShowAddMatch(false);
+      setNewMatchData({
+        matchType: 'group',
+        team1: '',
+        team2: '',
+        groupName: 'Group A',
+        knockoutMatchId: 'QF1'
+      });
+      alert('Match added successfully!');
+    } catch (error) {
+      console.error('Error adding match:', error);
+      alert(error.response?.data?.message || 'Failed to add match');
+    }
+  };
+
+  const handleEditMatch = (match, type, knockoutId = null) => {
+    setEditingMatch({ match, type, knockoutId });
+    setMatchEditData({
+      team1: match.team1?._id || match.team1 || '',
+      team2: match.team2?._id || match.team2 || ''
+    });
+  };
+
+  const handleSaveMatchEdit = async () => {
+    if (!editingMatch || !selectedTournament) return;
+
+    try {
+      if (editingMatch.type === 'group') {
+        await tournamentAPI.updateGroupMatch(
+          selectedTournament._id,
+          editingMatch.match._id,
+          matchEditData
+        );
+      } else {
+        await tournamentAPI.updateKnockoutMatch(
+          selectedTournament._id,
+          editingMatch.knockoutId,
+          matchEditData
+        );
+      }
+      await fetchTournamentDetails(selectedTournament._id);
+      setEditingMatch(null);
+      setMatchEditData({ team1: '', team2: '' });
+      alert('Match updated successfully!');
+    } catch (error) {
+      console.error('Error updating match:', error);
+      alert(error.response?.data?.message || 'Failed to update match');
     }
   };
 
@@ -453,6 +633,32 @@ function Tournament() {
                   {selectedTournament.status}
                 </span>
                 <button
+                  onClick={handleResetTournament}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: '#f59e0b',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={handleDeleteTournament}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: '#dc2626',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Delete
+                </button>
+                <button
                   onClick={() => setSelectedTournament(null)}
                   style={{
                     padding: '0.5rem 1rem',
@@ -582,7 +788,27 @@ function Tournament() {
 
           {/* Groups Tab */}
           {activeTab === 'groups' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+            <div>
+              {/* Reset Group Stage Button */}
+              {selectedTournament.groups?.some(g => g.matches?.length > 0 || g.standings?.some(s => s.played > 0)) && (
+                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={handleResetGroupStage}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: '#dc2626',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Reset Group Stage
+                  </button>
+                </div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
               {selectedTournament.groups?.map((group, index) => (
                 <div key={index} className="card">
                   <div className="card-header" style={{
@@ -604,21 +830,41 @@ function Tournament() {
                       </tr>
                     </thead>
                     <tbody>
-                      {group.standings
-                        ?.sort((a, b) => b.points - a.points || b.netRunRate - a.netRunRate)
-                        .map((standing, i) => (
-                          <tr key={i} style={{
-                            background: i < 2 ? 'rgba(16, 185, 129, 0.1)' : 'transparent'
-                          }}>
+                      {group.standings && group.standings.length > 0 ? (
+                        group.standings
+                          .sort((a, b) => b.points - a.points || b.netRunRate - a.netRunRate)
+                          .map((standing, i) => (
+                            <tr key={i} style={{
+                              background: i < 2 ? 'rgba(16, 185, 129, 0.1)' : 'transparent'
+                            }}>
+                              <td><strong>{i + 1}</strong></td>
+                              <td>{getTeamName(standing.team?._id || standing.team)}</td>
+                              <td>{standing.played}</td>
+                              <td style={{ color: '#10b981', fontWeight: '600' }}>{standing.won}</td>
+                              <td style={{ color: '#dc3545', fontWeight: '600' }}>{standing.lost}</td>
+                              <td><strong>{standing.points}</strong></td>
+                              <td>{standing.netRunRate?.toFixed(2) || '0.00'}</td>
+                            </tr>
+                          ))
+                      ) : group.teams && group.teams.length > 0 ? (
+                        group.teams.map((team, i) => (
+                          <tr key={i}>
                             <td><strong>{i + 1}</strong></td>
-                            <td>{getTeamName(standing.team?._id || standing.team)}</td>
-                            <td>{standing.played}</td>
-                            <td style={{ color: '#10b981', fontWeight: '600' }}>{standing.won}</td>
-                            <td style={{ color: '#dc3545', fontWeight: '600' }}>{standing.lost}</td>
-                            <td><strong>{standing.points}</strong></td>
-                            <td>{standing.netRunRate?.toFixed(2) || '0.00'}</td>
+                            <td>{team?.name || getTeamName(team?._id || team)}</td>
+                            <td>0</td>
+                            <td style={{ color: '#10b981', fontWeight: '600' }}>0</td>
+                            <td style={{ color: '#dc3545', fontWeight: '600' }}>0</td>
+                            <td><strong>0</strong></td>
+                            <td>0.00</td>
                           </tr>
-                        ))}
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'center', color: '#9ca3af' }}>
+                            No teams in this group
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -628,13 +874,33 @@ function Tournament() {
                   No groups configured yet. Go to Overview to setup groups.
                 </div>
               )}
+              </div>
             </div>
           )}
 
           {/* Knockout Tab */}
           {activeTab === 'knockout' && (
             <div className="card">
-              <div className="card-header">Knockout Bracket</div>
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Knockout Bracket</span>
+                {selectedTournament.knockout?.quarterfinals?.length > 0 && (
+                  <button
+                    onClick={handleResetKnockoutStage}
+                    style={{
+                      padding: '0.4rem 0.8rem',
+                      background: '#dc2626',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Reset Knockout Stage
+                  </button>
+                )}
+              </div>
               {selectedTournament.knockout?.quarterfinals?.length > 0 ? (
                 <KnockoutBracket knockout={selectedTournament.knockout} />
               ) : (
@@ -649,34 +915,122 @@ function Tournament() {
           {/* Matches Tab */}
           {activeTab === 'matches' && (
             <div className="card">
-              <div className="card-header">Tournament Matches</div>
+              <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Tournament Matches</span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => setShowAddMatch(true)}
+                    style={{
+                      padding: '0.4rem 0.8rem',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    + Add Match
+                  </button>
+                  {selectedTournament.groups?.some(g => g.matches?.length > 0) && (
+                    <button
+                      onClick={handleRegenerateGroupMatches}
+                      style={{
+                        padding: '0.4rem 0.8rem',
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '0.8rem'
+                      }}
+                    >
+                      Regenerate Group Matches
+                    </button>
+                  )}
+                  {selectedTournament.knockout?.quarterfinals?.length > 0 && (
+                    <>
+                      <button
+                        onClick={handleRegenerateKnockout}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          background: '#f59e0b',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        Regenerate Knockout
+                      </button>
+                      <button
+                        onClick={handleClearKnockout}
+                        style={{
+                          padding: '0.4rem 0.8rem',
+                          background: '#dc2626',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        Clear Knockout
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
               <div style={{ padding: '1rem' }}>
-                {/* Group Stage Matches */}
-                {selectedTournament.groups?.map((group, gIndex) => (
-                  <div key={gIndex} style={{ marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#374151', marginBottom: '0.75rem' }}>{group.name} Matches</h4>
-                    {group.matches?.length > 0 ? (
-                      <div style={{ display: 'grid', gap: '0.5rem' }}>
-                        {group.matches.map((match, mIndex) => (
-                          <div
-                            key={mIndex}
+                {/* Group Stage Matches - All combined and sorted by match number */}
+                <h4 style={{ color: '#374151', marginBottom: '0.75rem' }}>Group Stage Matches</h4>
+                {selectedTournament.groups?.some(g => g.matches?.length > 0) ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                    {(() => {
+                      // Collect all matches with their group names
+                      const allMatches = [];
+                      selectedTournament.groups.forEach(group => {
+                        (group.matches || []).forEach(m => {
+                          allMatches.push({
+                            ...m,
+                            _id: m._id,
+                            matchNumber: m.matchNumber,
+                            team1: m.team1,
+                            team2: m.team2,
+                            status: m.status,
+                            groupName: m.groupName || group.name
+                          });
+                        });
+                      });
+                      // Sort by matchNumber ascending (1 first)
+                      allMatches.sort((a, b) => a.matchNumber - b.matchNumber);
+                      return allMatches;
+                    })().map((match, mIndex) => (
+                        <div
+                          key={mIndex}
+                          style={{
+                            padding: '0.75rem 1rem',
+                            background: match.status === 'completed' ? '#dcfce7' :
+                                       match.status === 'live' ? '#fef3c7' : '#f3f4f6',
+                            borderRadius: '8px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <span
                             onClick={() => navigate(`/match/${match._id}`)}
-                            style={{
-                              padding: '0.75rem 1rem',
-                              background: match.status === 'completed' ? '#dcfce7' :
-                                         match.status === 'live' ? '#fef3c7' : '#f3f4f6',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center'
-                            }}
+                            style={{ cursor: 'pointer', flex: 1 }}
                           >
-                            <span>
-                              <strong>{getTeamName(match.team1?._id || match.team1)}</strong>
-                              {' vs '}
-                              <strong>{getTeamName(match.team2?._id || match.team2)}</strong>
-                            </span>
+                            <strong style={{ color: '#6b7280', marginRight: '0.5rem' }}>#{match.matchNumber}</strong>
+                            <strong>{getTeamName(match.team1?._id || match.team1)}</strong>
+                            {' vs '}
+                            <strong>{getTeamName(match.team2?._id || match.team2)}</strong>
+                            <span style={{ color: '#9ca3af', marginLeft: '0.5rem', fontSize: '0.85rem' }}>({match.groupName})</span>
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span style={{
                               padding: '0.25rem 0.75rem',
                               background: match.status === 'completed' ? '#10b981' :
@@ -687,14 +1041,32 @@ function Tournament() {
                             }}>
                               {match.status}
                             </span>
+                            {match.status === 'scheduled' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditMatch(match, 'group');
+                                }}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  background: '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                Edit
+                              </button>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ color: '#9ca3af', fontStyle: 'italic' }}>No matches yet</div>
-                    )}
+                        </div>
+                      ))}
                   </div>
-                ))}
+                ) : (
+                  <div style={{ color: '#9ca3af', fontStyle: 'italic', marginBottom: '1.5rem' }}>No group matches yet</div>
+                )}
 
                 {/* Knockout Matches */}
                 {selectedTournament.knockout?.quarterfinals?.length > 0 && (
@@ -703,42 +1075,346 @@ function Tournament() {
                     <div style={{ display: 'grid', gap: '0.5rem' }}>
                       {[...selectedTournament.knockout.quarterfinals,
                         ...selectedTournament.knockout.semifinals,
-                        selectedTournament.knockout.final].filter(m => m?.match).map((match, index) => (
+                        selectedTournament.knockout.final].filter(m => m).map((knockoutMatch, index) => (
                         <div
                           key={index}
-                          onClick={() => navigate(`/match/${match.match._id || match.match}`)}
                           style={{
                             padding: '0.75rem 1rem',
-                            background: match.status === 'completed' ? '#dcfce7' :
-                                       match.status === 'live' ? '#fef3c7' : '#f3f4f6',
+                            background: knockoutMatch.status === 'completed' ? '#dcfce7' :
+                                       knockoutMatch.status === 'scheduled' ? '#dbeafe' : '#f3f4f6',
                             borderRadius: '8px',
-                            cursor: 'pointer',
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center'
                           }}
                         >
-                          <span>
-                            <strong style={{ color: '#6b7280', marginRight: '0.5rem' }}>{match.matchNumber}</strong>
-                            <strong>{getTeamName(match.team1?._id || match.team1)}</strong>
+                          <span
+                            onClick={() => knockoutMatch.match && navigate(`/match/${knockoutMatch.match._id || knockoutMatch.match}`)}
+                            style={{ cursor: knockoutMatch.match ? 'pointer' : 'default', flex: 1 }}
+                          >
+                            <strong style={{ color: '#6b7280', marginRight: '0.5rem' }}>{knockoutMatch.matchNumber}</strong>
+                            <strong>{knockoutMatch.team1 ? getTeamName(knockoutMatch.team1._id || knockoutMatch.team1) : knockoutMatch.team1Source || 'TBD'}</strong>
                             {' vs '}
-                            <strong>{getTeamName(match.team2?._id || match.team2)}</strong>
+                            <strong>{knockoutMatch.team2 ? getTeamName(knockoutMatch.team2._id || knockoutMatch.team2) : knockoutMatch.team2Source || 'TBD'}</strong>
                           </span>
-                          <span style={{
-                            padding: '0.25rem 0.75rem',
-                            background: match.status === 'completed' ? '#10b981' :
-                                       match.status === 'live' || match.status === 'scheduled' ? '#3b82f6' : '#6b7280',
-                            color: 'white',
-                            borderRadius: '9999px',
-                            fontSize: '0.75rem'
-                          }}>
-                            {match.status}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{
+                              padding: '0.25rem 0.75rem',
+                              background: knockoutMatch.status === 'completed' ? '#10b981' :
+                                         knockoutMatch.status === 'scheduled' ? '#3b82f6' : '#6b7280',
+                              color: 'white',
+                              borderRadius: '9999px',
+                              fontSize: '0.75rem'
+                            }}>
+                              {knockoutMatch.status}
+                            </span>
+                            {knockoutMatch.status === 'scheduled' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditMatch(knockoutMatch, 'knockout', knockoutMatch.matchNumber);
+                                }}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  background: '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.75rem'
+                                }}
+                              >
+                                Edit
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Match Edit Modal */}
+          {editingMatch && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '2rem',
+                maxWidth: '500px',
+                width: '90%'
+              }}>
+                <h3 style={{ marginBottom: '1.5rem' }}>Edit Match</h3>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Team 1</label>
+                  <select
+                    value={matchEditData.team1}
+                    onChange={(e) => setMatchEditData({ ...matchEditData, team1: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db'
+                    }}
+                  >
+                    <option value="">Select Team</option>
+                    {teams.map(team => (
+                      <option key={team._id} value={team._id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Team 2</label>
+                  <select
+                    value={matchEditData.team2}
+                    onChange={(e) => setMatchEditData({ ...matchEditData, team2: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db'
+                    }}
+                  >
+                    <option value="">Select Team</option>
+                    {teams.map(team => (
+                      <option key={team._id} value={team._id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                  <button
+                    onClick={() => {
+                      setEditingMatch(null);
+                      setMatchEditData({ team1: '', team2: '' });
+                    }}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: '#e5e7eb',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveMatchEdit}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Add Match Modal */}
+          {showAddMatch && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '2rem',
+                maxWidth: '500px',
+                width: '90%',
+                maxHeight: '90vh',
+                overflowY: 'auto'
+              }}>
+                <h3 style={{ marginBottom: '1.5rem' }}>Add New Match</h3>
+
+                {/* Match Type Selection */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Match Type</label>
+                  <select
+                    value={newMatchData.matchType}
+                    onChange={(e) => setNewMatchData({ ...newMatchData, matchType: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db'
+                    }}
+                  >
+                    <option value="group">Group Match</option>
+                    <option value="quarterfinal">Quarterfinal</option>
+                    <option value="semifinal">Semifinal</option>
+                    <option value="final">Final</option>
+                  </select>
+                </div>
+
+                {/* Group Selection (only for group matches) */}
+                {newMatchData.matchType === 'group' && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Group</label>
+                    <select
+                      value={newMatchData.groupName}
+                      onChange={(e) => setNewMatchData({ ...newMatchData, groupName: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '4px',
+                        border: '1px solid #d1d5db'
+                      }}
+                    >
+                      {selectedTournament?.groups?.map((group, index) => (
+                        <option key={index} value={group.name}>{group.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Knockout Match ID (for knockout matches) */}
+                {newMatchData.matchType === 'quarterfinal' && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Quarterfinal Match</label>
+                    <select
+                      value={newMatchData.knockoutMatchId}
+                      onChange={(e) => setNewMatchData({ ...newMatchData, knockoutMatchId: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '4px',
+                        border: '1px solid #d1d5db'
+                      }}
+                    >
+                      <option value="QF1">QF1 (A1 vs B2)</option>
+                      <option value="QF2">QF2 (C1 vs D2)</option>
+                      <option value="QF3">QF3 (B1 vs A2)</option>
+                      <option value="QF4">QF4 (D1 vs C2)</option>
+                    </select>
+                  </div>
+                )}
+
+                {newMatchData.matchType === 'semifinal' && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Semifinal Match</label>
+                    <select
+                      value={newMatchData.knockoutMatchId}
+                      onChange={(e) => setNewMatchData({ ...newMatchData, knockoutMatchId: e.target.value })}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        borderRadius: '4px',
+                        border: '1px solid #d1d5db'
+                      }}
+                    >
+                      <option value="SF1">SF1 (Winner QF1 vs Winner QF2)</option>
+                      <option value="SF2">SF2 (Winner QF3 vs Winner QF4)</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Team 1 Selection */}
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Team 1</label>
+                  <select
+                    value={newMatchData.team1}
+                    onChange={(e) => setNewMatchData({ ...newMatchData, team1: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db'
+                    }}
+                  >
+                    <option value="">Select Team</option>
+                    {teams.map(team => (
+                      <option key={team._id} value={team._id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Team 2 Selection */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Team 2</label>
+                  <select
+                    value={newMatchData.team2}
+                    onChange={(e) => setNewMatchData({ ...newMatchData, team2: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '0.75rem',
+                      borderRadius: '4px',
+                      border: '1px solid #d1d5db'
+                    }}
+                  >
+                    <option value="">Select Team</option>
+                    {teams.map(team => (
+                      <option key={team._id} value={team._id}>{team.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Buttons */}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                  <button
+                    onClick={() => {
+                      setShowAddMatch(false);
+                      setNewMatchData({
+                        matchType: 'group',
+                        team1: '',
+                        team2: '',
+                        groupName: 'Group A',
+                        knockoutMatchId: 'QF1'
+                      });
+                    }}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: '#e5e7eb',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleAddMatch}
+                    style={{
+                      padding: '0.75rem 1.5rem',
+                      background: 'linear-gradient(135deg, #10b981, #059669)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Add Match
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -19,30 +19,60 @@ export const getAllTournaments = async (req, res) => {
 // Get tournament by ID
 export const getTournamentById = async (req, res) => {
   try {
-    const tournament = await Tournament.findById(req.params.id)
-      .populate('groups.teams', 'name')
-      .populate('groups.matches')
-      .populate('groups.standings.team', 'name')
-      .populate('knockout.quarterfinals.team1', 'name')
-      .populate('knockout.quarterfinals.team2', 'name')
-      .populate('knockout.quarterfinals.winner', 'name')
-      .populate('knockout.quarterfinals.match')
-      .populate('knockout.semifinals.team1', 'name')
-      .populate('knockout.semifinals.team2', 'name')
-      .populate('knockout.semifinals.winner', 'name')
-      .populate('knockout.semifinals.match')
-      .populate('knockout.final.team1', 'name')
-      .populate('knockout.final.team2', 'name')
-      .populate('knockout.final.winner', 'name')
-      .populate('knockout.final.match')
-      .populate('champion', 'name')
-      .populate('runnerUp', 'name');
+    // Build base populate options
+    const populateOptions = [
+      { path: 'groups.teams', select: 'name' },
+      {
+        path: 'groups.matches',
+        populate: [
+          { path: 'team1', select: 'name' },
+          { path: 'team2', select: 'name' }
+        ]
+      },
+      { path: 'groups.standings.team', select: 'name' },
+      { path: 'knockout.quarterfinals.team1', select: 'name' },
+      { path: 'knockout.quarterfinals.team2', select: 'name' },
+      { path: 'knockout.quarterfinals.winner', select: 'name' },
+      { path: 'knockout.quarterfinals.match' },
+      { path: 'knockout.semifinals.team1', select: 'name' },
+      { path: 'knockout.semifinals.team2', select: 'name' },
+      { path: 'knockout.semifinals.winner', select: 'name' },
+      { path: 'knockout.semifinals.match' },
+      { path: 'champion', select: 'name' },
+      { path: 'runnerUp', select: 'name' }
+    ];
+
+    let tournament = await Tournament.findById(req.params.id);
 
     if (!tournament) {
       return res.status(404).json({ message: 'Tournament not found' });
     }
+
+    // Only add final populates if knockout.final exists and is not null
+    if (tournament.knockout && tournament.knockout.final) {
+      populateOptions.push(
+        { path: 'knockout.final.team1', select: 'name' },
+        { path: 'knockout.final.team2', select: 'name' },
+        { path: 'knockout.final.winner', select: 'name' },
+        { path: 'knockout.final.match' }
+      );
+    }
+
+    // Re-fetch with all populates
+    tournament = await Tournament.findById(req.params.id).populate(populateOptions);
+
+    // Sort matches by matchNumber after population
+    if (tournament.groups) {
+      tournament.groups.forEach(group => {
+        if (group.matches && group.matches.length > 0) {
+          group.matches.sort((a, b) => (a.matchNumber || 0) - (b.matchNumber || 0));
+        }
+      });
+    }
+
     res.json(tournament);
   } catch (error) {
+    console.error('Error fetching tournament:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -184,6 +214,126 @@ export const generateGroupMatches = async (req, res) => {
       message: `Generated ${createdMatches.length} group stage matches`,
       matches: createdMatches,
       tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Regenerate group stage matches (delete existing and create new)
+export const regenerateGroupMatches = async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    if (tournament.groups.length === 0) {
+      return res.status(400).json({ message: 'No groups configured. Please setup groups first.' });
+    }
+
+    // Delete all existing group stage matches for this tournament
+    await Match.deleteMany({ tournament: tournament._id, stage: 'group' });
+
+    // Get the highest current match number
+    const lastMatch = await Match.findOne().sort({ matchNumber: -1 });
+    let matchNumber = lastMatch ? lastMatch.matchNumber + 1 : 1;
+
+    const createdMatches = [];
+
+    for (const group of tournament.groups) {
+      const teams = group.teams;
+      const groupMatches = [];
+
+      // Reset standings for the group
+      group.standings = group.teams.map(teamId => ({
+        team: teamId,
+        played: 0,
+        won: 0,
+        lost: 0,
+        points: 0,
+        netRunRate: 0,
+        runsScored: 0,
+        runsConceded: 0,
+        oversPlayed: 0,
+        oversFaced: 0
+      }));
+
+      // Generate round-robin matches for this group
+      for (let i = 0; i < teams.length; i++) {
+        for (let j = i + 1; j < teams.length; j++) {
+          const match = new Match({
+            matchNumber: matchNumber++,
+            tournament: tournament._id,
+            stage: 'group',
+            groupName: group.name,
+            team1: teams[i],
+            team2: teams[j],
+            date: new Date(),
+            maxOvers: tournament.format.maxOversPerMatch,
+            status: 'scheduled'
+          });
+
+          await match.save();
+          groupMatches.push(match._id);
+          createdMatches.push(match);
+        }
+      }
+
+      // Update group with match references
+      group.matches = groupMatches;
+    }
+
+    tournament.status = 'group-stage';
+    tournament.markModified('groups');
+    await tournament.save();
+
+    res.json({
+      message: `Regenerated ${createdMatches.length} group stage matches`,
+      matches: createdMatches,
+      tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Update a group match (change teams, date, etc.)
+export const updateGroupMatch = async (req, res) => {
+  try {
+    const { id, matchId } = req.params;
+    const { team1, team2, date, time } = req.body;
+
+    const tournament = await Tournament.findById(id);
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+
+    if (match.tournament.toString() !== id) {
+      return res.status(400).json({ message: 'Match does not belong to this tournament' });
+    }
+
+    if (match.status === 'completed' || match.status === 'live') {
+      return res.status(400).json({ message: 'Cannot update a match that is live or completed' });
+    }
+
+    // Update match fields
+    if (team1) match.team1 = team1;
+    if (team2) match.team2 = team2;
+    if (date) match.date = date;
+    if (time) match.time = time;
+
+    await match.save();
+
+    res.json({
+      message: 'Match updated successfully',
+      match
     });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -630,6 +780,163 @@ export const getAllGroupStandings = async (req, res) => {
   }
 };
 
+// Regenerate knockout bracket (delete existing and create new)
+export const regenerateKnockoutBracket = async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id)
+      .populate('groups.standings.team', 'name');
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    // Delete all existing knockout stage matches for this tournament
+    await Match.deleteMany({
+      tournament: tournament._id,
+      stage: { $in: ['quarterfinal', 'semifinal', 'final'] }
+    });
+
+    // Clear knockout data
+    tournament.knockout = {
+      quarterfinals: [],
+      semifinals: [],
+      final: {
+        matchNumber: 'FINAL',
+        match: null,
+        team1Source: 'Winner SF1',
+        team2Source: 'Winner SF2',
+        team1: null,
+        team2: null,
+        winner: null,
+        status: 'pending'
+      }
+    };
+    tournament.champion = null;
+    tournament.runnerUp = null;
+
+    // Now regenerate the knockout bracket
+    // Get qualified teams from each group (top 2 from each group, sorted by points then NRR)
+    const qualifiedTeams = tournament.getQualifiedTeams();
+
+    if (qualifiedTeams.length < 8) {
+      // Reset status and save even if not enough teams
+      tournament.status = 'group-stage';
+      await tournament.save();
+      return res.status(400).json({
+        message: `Not enough qualified teams. Need 8 teams, found ${qualifiedTeams.length}. Ensure group stage is complete.`
+      });
+    }
+
+    // Get highest match number
+    const lastMatch = await Match.findOne().sort({ matchNumber: -1 });
+    let matchNumber = lastMatch ? lastMatch.matchNumber + 1 : 1;
+
+    // Setup quarterfinals bracket
+    const groupTeams = {};
+    qualifiedTeams.forEach(qt => {
+      if (!groupTeams[qt.group]) groupTeams[qt.group] = [];
+      groupTeams[qt.group].push(qt);
+    });
+
+    // Sort each group's teams by position
+    Object.keys(groupTeams).forEach(group => {
+      groupTeams[group].sort((a, b) => a.position - b.position);
+    });
+
+    const quarterfinalSetup = [
+      { team1Source: 'Group A - 1st', team2Source: 'Group B - 2nd', team1Group: 'Group A', team1Pos: 0, team2Group: 'Group B', team2Pos: 1 },
+      { team1Source: 'Group C - 1st', team2Source: 'Group D - 2nd', team1Group: 'Group C', team1Pos: 0, team2Group: 'Group D', team2Pos: 1 },
+      { team1Source: 'Group B - 1st', team2Source: 'Group A - 2nd', team1Group: 'Group B', team1Pos: 0, team2Group: 'Group A', team2Pos: 1 },
+      { team1Source: 'Group D - 1st', team2Source: 'Group C - 2nd', team1Group: 'Group D', team1Pos: 0, team2Group: 'Group C', team2Pos: 1 }
+    ];
+
+    const quarterfinals = [];
+    for (let i = 0; i < quarterfinalSetup.length; i++) {
+      const setup = quarterfinalSetup[i];
+      const team1 = groupTeams[setup.team1Group]?.[setup.team1Pos]?.team;
+      const team2 = groupTeams[setup.team2Group]?.[setup.team2Pos]?.team;
+
+      const match = new Match({
+        matchNumber: matchNumber++,
+        tournament: tournament._id,
+        stage: 'quarterfinal',
+        knockoutMatchId: `QF${i + 1}`,
+        team1: team1,
+        team2: team2,
+        date: new Date(),
+        maxOvers: tournament.format.maxOversPerMatch,
+        status: 'scheduled'
+      });
+
+      await match.save();
+
+      quarterfinals.push({
+        matchNumber: `QF${i + 1}`,
+        match: match._id,
+        team1Source: setup.team1Source,
+        team2Source: setup.team2Source,
+        team1: team1,
+        team2: team2,
+        winner: null,
+        status: 'scheduled'
+      });
+    }
+
+    // Setup semifinals (teams TBD)
+    const semifinals = [
+      {
+        matchNumber: 'SF1',
+        match: null,
+        team1Source: 'Winner QF1',
+        team2Source: 'Winner QF2',
+        team1: null,
+        team2: null,
+        winner: null,
+        status: 'pending'
+      },
+      {
+        matchNumber: 'SF2',
+        match: null,
+        team1Source: 'Winner QF3',
+        team2Source: 'Winner QF4',
+        team1: null,
+        team2: null,
+        winner: null,
+        status: 'pending'
+      }
+    ];
+
+    // Setup final (teams TBD)
+    const final = {
+      matchNumber: 'FINAL',
+      match: null,
+      team1Source: 'Winner SF1',
+      team2Source: 'Winner SF2',
+      team1: null,
+      team2: null,
+      winner: null,
+      status: 'pending'
+    };
+
+    tournament.knockout = {
+      quarterfinals,
+      semifinals,
+      final
+    };
+
+    tournament.status = 'knockout-stage';
+    await tournament.save();
+
+    res.json({
+      message: 'Knockout bracket regenerated successfully',
+      knockout: tournament.knockout,
+      tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 // Update knockout match manually (for editing teams before match starts)
 export const updateKnockoutMatch = async (req, res) => {
   try {
@@ -692,6 +999,302 @@ export const updateKnockoutMatch = async (req, res) => {
     res.json({
       message: 'Knockout match updated',
       knockoutMatch,
+      tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Clear knockout bracket (delete all knockout matches and reset knockout data)
+export const clearKnockout = async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    // Delete all knockout stage matches for this tournament
+    await Match.deleteMany({
+      tournament: tournament._id,
+      stage: { $in: ['quarterfinal', 'semifinal', 'final'] }
+    });
+
+    // Clear knockout data
+    tournament.knockout = {
+      quarterfinals: [],
+      semifinals: [],
+      final: {
+        matchNumber: 'FINAL',
+        match: null,
+        team1Source: 'Winner SF1',
+        team2Source: 'Winner SF2',
+        team1: null,
+        team2: null,
+        winner: null,
+        status: 'pending'
+      }
+    };
+    tournament.champion = null;
+    tournament.runnerUp = null;
+    tournament.status = 'group-stage';
+
+    await tournament.save();
+
+    res.json({
+      message: 'Knockout bracket cleared successfully',
+      tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Add a new match to tournament (group or knockout)
+export const addMatch = async (req, res) => {
+  try {
+    const { matchType, team1, team2, groupName, knockoutMatchId, matchNumber: customMatchNumber, date: customDate } = req.body;
+
+    const tournament = await Tournament.findById(req.params.id);
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    // Get the highest current match number (use custom if provided)
+    let matchNumber;
+    if (customMatchNumber) {
+      matchNumber = customMatchNumber;
+    } else {
+      const lastMatch = await Match.findOne().sort({ matchNumber: -1 });
+      matchNumber = lastMatch ? lastMatch.matchNumber + 1 : 1;
+    }
+
+    // Determine stage based on matchType
+    let stage = 'group';
+    if (matchType === 'quarterfinal' || matchType === 'semifinal' || matchType === 'final') {
+      stage = matchType;
+    }
+
+    // Create the match
+    const match = new Match({
+      matchNumber,
+      tournament: tournament._id,
+      stage,
+      groupName: matchType === 'group' ? groupName : null,
+      knockoutMatchId: knockoutMatchId || null,
+      team1,
+      team2,
+      date: customDate ? new Date(customDate) : new Date(),
+      maxOvers: tournament.format.maxOversPerMatch,
+      status: 'scheduled'
+    });
+
+    await match.save();
+
+    // If it's a group match, add to the group's matches array
+    if (matchType === 'group' && groupName) {
+      const group = tournament.groups.find(g => g.name === groupName);
+      if (group) {
+        group.matches.push(match._id);
+        tournament.markModified('groups');
+        await tournament.save();
+      }
+    }
+
+    // If it's a knockout match, update the knockout bracket
+    if (matchType === 'quarterfinal' && knockoutMatchId) {
+      const qfIndex = tournament.knockout.quarterfinals.findIndex(qf => qf.matchNumber === knockoutMatchId);
+      if (qfIndex !== -1) {
+        tournament.knockout.quarterfinals[qfIndex].match = match._id;
+        tournament.knockout.quarterfinals[qfIndex].team1 = team1;
+        tournament.knockout.quarterfinals[qfIndex].team2 = team2;
+        tournament.knockout.quarterfinals[qfIndex].status = 'scheduled';
+        tournament.markModified('knockout');
+        await tournament.save();
+      }
+    } else if (matchType === 'semifinal' && knockoutMatchId) {
+      const sfIndex = tournament.knockout.semifinals.findIndex(sf => sf.matchNumber === knockoutMatchId);
+      if (sfIndex !== -1) {
+        tournament.knockout.semifinals[sfIndex].match = match._id;
+        tournament.knockout.semifinals[sfIndex].team1 = team1;
+        tournament.knockout.semifinals[sfIndex].team2 = team2;
+        tournament.knockout.semifinals[sfIndex].status = 'scheduled';
+        tournament.markModified('knockout');
+        await tournament.save();
+      }
+    } else if (matchType === 'final') {
+      if (tournament.knockout.final) {
+        tournament.knockout.final.match = match._id;
+        tournament.knockout.final.team1 = team1;
+        tournament.knockout.final.team2 = team2;
+        tournament.knockout.final.status = 'scheduled';
+        tournament.markModified('knockout');
+        await tournament.save();
+      }
+    }
+
+    res.json({
+      message: 'Match added successfully',
+      match
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Reset group stage only - clear group matches and standings
+export const resetGroupStage = async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    // Delete only group stage matches
+    await Match.deleteMany({ tournament: tournament._id, stage: 'group' });
+
+    // Reset group matches and standings
+    tournament.groups.forEach(group => {
+      group.matches = [];
+      group.standings = group.teams.map(teamId => ({
+        team: teamId,
+        played: 0,
+        won: 0,
+        lost: 0,
+        points: 0,
+        netRunRate: 0,
+        runsScored: 0,
+        runsConceded: 0,
+        oversPlayed: 0,
+        oversFaced: 0
+      }));
+    });
+
+    // Reset tournament status
+    tournament.status = 'planned';
+
+    tournament.markModified('groups');
+    await tournament.save();
+
+    res.json({
+      message: 'Group stage reset successfully. All group matches have been removed.',
+      tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Reset knockout stage only - clear knockout matches
+export const resetKnockoutStage = async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    // Delete only knockout stage matches
+    await Match.deleteMany({
+      tournament: tournament._id,
+      stage: { $in: ['quarterfinal', 'semifinal', 'final'] }
+    });
+
+    // Reset knockout data
+    tournament.knockout = {
+      quarterfinals: [],
+      semifinals: [],
+      final: {
+        matchNumber: 'FINAL',
+        match: null,
+        team1Source: 'Winner SF1',
+        team2Source: 'Winner SF2',
+        team1: null,
+        team2: null,
+        winner: null,
+        status: 'pending'
+      }
+    };
+
+    // Reset champions
+    tournament.champion = null;
+    tournament.runnerUp = null;
+
+    // Set status back to group-stage if groups exist
+    if (tournament.groups?.length > 0) {
+      tournament.status = 'group-stage';
+    }
+
+    tournament.markModified('knockout');
+    await tournament.save();
+
+    res.json({
+      message: 'Knockout stage reset successfully. All knockout matches have been removed.',
+      tournament
+    });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Reset tournament - clear all matches (group and knockout)
+export const resetTournament = async (req, res) => {
+  try {
+    const tournament = await Tournament.findById(req.params.id);
+
+    if (!tournament) {
+      return res.status(404).json({ message: 'Tournament not found' });
+    }
+
+    // Delete all matches associated with this tournament
+    await Match.deleteMany({ tournament: tournament._id });
+
+    // Reset group matches and standings
+    tournament.groups.forEach(group => {
+      group.matches = [];
+      group.standings = group.teams.map(teamId => ({
+        team: teamId,
+        played: 0,
+        won: 0,
+        lost: 0,
+        points: 0,
+        netRunRate: 0,
+        runsScored: 0,
+        runsConceded: 0,
+        oversPlayed: 0,
+        oversFaced: 0
+      }));
+    });
+
+    // Reset knockout data
+    tournament.knockout = {
+      quarterfinals: [],
+      semifinals: [],
+      final: {
+        matchNumber: 'FINAL',
+        match: null,
+        team1Source: 'Winner SF1',
+        team2Source: 'Winner SF2',
+        team1: null,
+        team2: null,
+        winner: null,
+        status: 'pending'
+      }
+    };
+
+    // Reset tournament status and champions
+    tournament.champion = null;
+    tournament.runnerUp = null;
+    tournament.status = 'planned';
+
+    tournament.markModified('groups');
+    tournament.markModified('knockout');
+    await tournament.save();
+
+    res.json({
+      message: 'Tournament reset successfully. All matches have been removed.',
       tournament
     });
   } catch (error) {

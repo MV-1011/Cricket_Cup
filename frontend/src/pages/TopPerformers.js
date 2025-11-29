@@ -71,28 +71,27 @@ function TopPerformers() {
       const response = await playerAPI.getAll();
       const players = response.data;
 
-      // BATSMEN: Ranked by Batting Average (Higher is better)
+      // BATSMEN: All players who have batted, ranked by Most Runs (Higher is better)
       const batsmenList = players
-        .filter(p => p.role === 'Batsman' && p.battingStats.innings > 0)
+        .filter(p => p.battingStats.innings > 0)
         .sort((a, b) => {
-          const avgA = parseFloat(a.battingStats.average) || 0;
-          const avgB = parseFloat(b.battingStats.average) || 0;
-          return avgB - avgA; // Descending order
+          const runsA = a.battingStats.runs || 0;
+          const runsB = b.battingStats.runs || 0;
+          return runsB - runsA; // Descending order (most runs on top)
         });
 
-      // BOWLERS: Ranked by Economy Rate (Lower is better)
+      // BOWLERS: All players who have bowled, ranked by Economy Rate (Lower is better)
       const bowlersList = players
-        .filter(p => p.role === 'Bowler' && p.bowlingStats.innings > 0)
+        .filter(p => p.bowlingStats.innings > 0)
         .sort((a, b) => {
           const econA = parseFloat(a.bowlingStats.economy) || 999;
           const econB = parseFloat(b.bowlingStats.economy) || 999;
           return econA - econB; // Ascending order (lower economy is better)
         });
 
-      // ALL-ROUNDERS: Ranked by Simple Formula (Average - Economy)
+      // ALL-ROUNDERS: Players who have BOTH batted AND bowled, ranked by (Batting Avg - Economy)
       const allRoundersList = players
-        .filter(p => p.role === 'All-rounder' &&
-               (p.battingStats.innings > 0 || p.bowlingStats.innings > 0))
+        .filter(p => p.battingStats.innings > 0 && p.bowlingStats.innings > 0)
         .sort((a, b) => {
           const batAvgA = parseFloat(a.battingStats.average) || 0;
           const econA = parseFloat(a.bowlingStats.economy) || 10;
@@ -143,7 +142,7 @@ function TopPerformers() {
           <div>
             🏏 Batsmen Standings
             <span style={{ fontSize: '0.9rem', fontWeight: 'normal', marginLeft: '1rem', color: '#6b7280' }}>
-              (Ranked by Batting Average)
+              (Ranked by Most Runs)
             </span>
           </div>
           {batsmen.length > 0 && (

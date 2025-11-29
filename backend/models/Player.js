@@ -17,8 +17,9 @@ const playerSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['Batsman', 'Bowler', 'All-rounder'],
-    required: true
+    enum: ['Batsman', 'Bowler', 'All-rounder', 'Wicket-keeper', null],
+    required: false,
+    default: null
   },
   // Batting Statistics
   battingStats: {

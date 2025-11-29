@@ -143,8 +143,9 @@ function LiveScore() {
     // But we check if they can form any new valid pair
     if (!match || !match.innings || match.innings.length === 0) return false;
     const currentInnings = match.innings[match.currentInnings - 1];
+    if (!currentInnings || !currentInnings.battingTeam) return false;
     const battingTeamId = currentInnings.battingTeam.toString();
-    const teamPlayers = allPlayers.filter(p => p.team._id === battingTeamId);
+    const teamPlayers = allPlayers.filter(p => p.team && p.team._id === battingTeamId);
 
     // Check if this player can form a new pair with ANY other player
     const canFormNewPair = teamPlayers.some(otherPlayer => {
@@ -159,9 +160,10 @@ function LiveScore() {
   const getAvailableBatsmen = (teamPlayers) => {
     if (!match || !match.innings || match.innings.length === 0) return teamPlayers;
     const currentInnings = match.innings[match.currentInnings - 1];
+    if (!currentInnings || !currentInnings.battingScorecard) return teamPlayers;
 
     // Get players who have already batted
-    const battedPlayers = currentInnings.battingScorecard.map(b => b.player._id || b.player);
+    const battedPlayers = currentInnings.battingScorecard.map(b => (b.player && b.player._id) || b.player);
 
     // Return players who haven't batted yet, or have batted but can form a new valid pair
     return teamPlayers.filter(player => {
@@ -187,7 +189,8 @@ function LiveScore() {
     // Check if player has batted but can still form new pairs
     if (!match || !match.innings || match.innings.length === 0) return includeColor ? ' 🟢 Available' : ' ● Available';
     const currentInnings = match.innings[match.currentInnings - 1];
-    const battedPlayers = currentInnings.battingScorecard.map(b => b.player._id || b.player);
+    if (!currentInnings || !currentInnings.battingScorecard) return includeColor ? ' 🟢 Available' : ' ● Available';
+    const battedPlayers = currentInnings.battingScorecard.map(b => (b.player && b.player._id) || b.player);
 
     if (battedPlayers.includes(playerId)) {
       return includeColor ? ' 🟡 Batted' : ' ● Batted';
@@ -644,10 +647,10 @@ function LiveScore() {
 
   const currentInnings = match.innings[match.currentInnings - 1];
   const battingTeamPlayers = allPlayers.filter(
-    p => currentInnings && p.team._id === currentInnings.battingTeam.toString()
+    p => currentInnings && p.team && p.team._id === currentInnings.battingTeam?.toString()
   );
   const bowlingTeamPlayers = allPlayers.filter(
-    p => currentInnings && p.team._id === currentInnings.bowlingTeam.toString()
+    p => currentInnings && p.team && p.team._id === currentInnings.bowlingTeam?.toString()
   );
 
   // Get available batsmen (filter out players who can't form new pairs)
@@ -825,36 +828,6 @@ function LiveScore() {
                     Select Batting Pair (2 Overs)
                   </h4>
 
-                  {/* Player Status Overview */}
-                  <div style={{
-                    background: 'rgba(255,255,255,0.9)',
-                    padding: '0.75rem',
-                    borderRadius: '5px',
-                    marginBottom: '1rem',
-                    fontSize: '0.85rem'
-                  }}>
-                    <strong>Team Status:</strong>
-                    <div style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.25rem' }}>
-                      {battingTeamPlayers.map(player => {
-                        const status = getPlayerBattingStatus(player._id, true);
-                        const isCompleted = hasPlayerCompletedOvers(player._id);
-                        return (
-                          <div key={player._id} style={{
-                            color: isCompleted ? '#6c757d' : '#000',
-                            textDecoration: isCompleted ? 'line-through' : 'none'
-                          }}>
-                            {player.name}{status}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#666' }}>
-                      🟢 Available &nbsp;&nbsp;
-                      🟡 Batted &nbsp;&nbsp;
-                      🔴 <s>Completed</s>
-                    </div>
-                  </div>
-
                   <div className="form-group">
                     <label className="form-label">Batsman 1</label>
                     <select
@@ -863,17 +836,23 @@ function LiveScore() {
                       onChange={(e) => setBattingPair({...battingPair, player1: e.target.value})}
                     >
                       <option value="">Select Player 1</option>
-                      {availableBatsmen.map(player => {
-                        const status = getPlayerBattingStatus(player._id);
-                        const isDisabled = battingPair.player2 === player._id;
+                      {battingTeamPlayers.map(player => {
+                        const isCompleted = hasPlayerCompletedOvers(player._id);
+                        const isSelectedAsPlayer2 = battingPair.player2 === player._id;
+                        const isDisabled = isCompleted || isSelectedAsPlayer2;
                         return (
-                          <option key={player._id} value={player._id} disabled={isDisabled}>
-                            {player.name}{status}{isDisabled ? ' (Already selected as Player 2)' : ''}
+                          <option
+                            key={player._id}
+                            value={player._id}
+                            disabled={isDisabled}
+                            style={{ color: isCompleted ? '#999' : 'inherit' }}
+                          >
+                            {player.name}{isCompleted ? ' (Completed 2 overs)' : ''}{isSelectedAsPlayer2 ? ' (Selected as Player 2)' : ''}
                           </option>
                         );
                       })}
                     </select>
-                    {availableBatsmen.length === 0 && (
+                    {battingTeamPlayers.every(p => hasPlayerCompletedOvers(p._id)) && (
                       <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
                         No available batsmen - all have completed their overs
                       </small>
@@ -887,17 +866,23 @@ function LiveScore() {
                       onChange={(e) => setBattingPair({...battingPair, player2: e.target.value})}
                     >
                       <option value="">Select Player 2</option>
-                      {availableBatsmen.map(player => {
-                        const status = getPlayerBattingStatus(player._id);
-                        const isDisabled = battingPair.player1 === player._id;
+                      {battingTeamPlayers.map(player => {
+                        const isCompleted = hasPlayerCompletedOvers(player._id);
+                        const isSelectedAsPlayer1 = battingPair.player1 === player._id;
+                        const isDisabled = isCompleted || isSelectedAsPlayer1;
                         return (
-                          <option key={player._id} value={player._id} disabled={isDisabled}>
-                            {player.name}{status}{isDisabled ? ' (Already selected as Player 1)' : ''}
+                          <option
+                            key={player._id}
+                            value={player._id}
+                            disabled={isDisabled}
+                            style={{ color: isCompleted ? '#999' : 'inherit' }}
+                          >
+                            {player.name}{isCompleted ? ' (Completed 2 overs)' : ''}{isSelectedAsPlayer1 ? ' (Selected as Player 1)' : ''}
                           </option>
                         );
                       })}
                     </select>
-                    {availableBatsmen.length === 0 && (
+                    {battingTeamPlayers.every(p => hasPlayerCompletedOvers(p._id)) && (
                       <small style={{ color: '#dc3545', marginTop: '0.25rem', display: 'block' }}>
                         No available batsmen - all have completed their overs
                       </small>

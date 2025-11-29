@@ -63,12 +63,20 @@ export const tournamentAPI = {
   delete: (id) => api.delete(`/tournaments/${id}`),
   setupGroups: (id, data) => api.post(`/tournaments/${id}/groups/setup`, data),
   generateGroupMatches: (id) => api.post(`/tournaments/${id}/groups/generate-matches`),
+  regenerateGroupMatches: (id) => api.post(`/tournaments/${id}/groups/regenerate-matches`),
   getAllGroupStandings: (id) => api.get(`/tournaments/${id}/groups/standings`),
   getGroupStandings: (id, groupName) => api.get(`/tournaments/${id}/groups/${groupName}/standings`),
   generateKnockoutBracket: (id) => api.post(`/tournaments/${id}/knockout/generate`),
+  regenerateKnockoutBracket: (id) => api.post(`/tournaments/${id}/knockout/regenerate`),
+  clearKnockout: (id) => api.delete(`/tournaments/${id}/knockout`),
   updateKnockoutMatch: (id, knockoutId, data) => api.put(`/tournaments/${id}/knockout/${knockoutId}`, data),
+  updateGroupMatch: (id, matchId, data) => api.put(`/tournaments/${id}/groups/match/${matchId}`, data),
   updateGroupStandings: (matchId) => api.post(`/tournaments/match/${matchId}/update-standings`),
   advanceKnockoutWinner: (matchId) => api.post(`/tournaments/match/${matchId}/advance-knockout`),
+  addMatch: (id, data) => api.post(`/tournaments/${id}/matches`, data),
+  resetTournament: (id) => api.post(`/tournaments/${id}/reset`),
+  resetGroupStage: (id) => api.post(`/tournaments/${id}/reset/groups`),
+  resetKnockoutStage: (id) => api.post(`/tournaments/${id}/reset/knockout`),
 };
 
 export default api;
