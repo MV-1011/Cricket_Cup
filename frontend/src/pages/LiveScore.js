@@ -73,24 +73,35 @@ function LiveScore() {
   // Restore saved match state on load (batting pair, striker, bowler, pair start over)
   useEffect(() => {
     if (match && match.status === 'live') {
-      // Restore batting pair
+      // Check if there's a saved batting pair
       if (match.currentBattingPair && match.currentBattingPair.player1 && match.currentBattingPair.player2) {
+        // Restore batting pair
         setBattingPair({
           player1: match.currentBattingPair.player1._id || match.currentBattingPair.player1,
           player2: match.currentBattingPair.player2._id || match.currentBattingPair.player2
         });
+        setShowPairSelection(false); // Hide pair selection since we have a pair
+
+        // Restore striker
+        if (match.currentStriker) {
+          const strikerId = match.currentStriker._id || match.currentStriker;
+          setStriker(strikerId);
+          setCurrentBatsman(strikerId);
+        }
+      } else {
+        // No batting pair set - show pair selection for scorer to choose
+        setShowPairSelection(true);
+        setBattingPair({ player1: '', player2: '' });
+        setStriker('');
+        setCurrentBatsman('');
       }
 
-      // Restore striker
-      if (match.currentStriker) {
-        const strikerId = match.currentStriker._id || match.currentStriker;
-        setStriker(strikerId);
-        setCurrentBatsman(strikerId);
-      }
-
-      // Restore bowler
+      // Restore bowler only if one was saved
       if (match.currentBowler) {
         setCurrentBowler(match.currentBowler._id || match.currentBowler);
+      } else {
+        // No bowler set - keep it empty for scorer to choose
+        setCurrentBowler('');
       }
 
       // Restore pair start over
@@ -132,16 +143,20 @@ function LiveScore() {
     return bowlerStats ? Math.floor(bowlerStats.balls / 4) : 0;
   };
 
+  // Helper function to check if a player has batted in the current innings
+  const hasPlayerBatted = (playerId) => {
+    if (!match || !match.innings || match.innings.length === 0) return false;
+    const currentInnings = match.innings[match.currentInnings - 1];
+    if (!currentInnings || !currentInnings.battingScorecard) return false;
+
+    // Check if player appears in the batting scorecard
+    return currentInnings.battingScorecard.some(
+      batting => (batting.player._id === playerId || batting.player === playerId)
+    );
+  };
+
   // Helper function to check if a player has completed all their overs
   const hasPlayerCompletedOvers = (playerId) => {
-    // Count how many different pairs this player has been part of
-    // let pairCount = 0;
-    // usedPairs.forEach(pair => {
-    //   if (pair.player1 === playerId || pair.player2 === playerId) {
-    //     pairCount++;
-    //   }
-    // });
-
     // In YYC rules, each player can be in multiple pairs
     // But we check if they can form any new valid pair
     if (!match || !match.innings || match.innings.length === 0) return false;
@@ -1080,39 +1095,55 @@ function LiveScore() {
                 )}
               </div>
 
-              {/* Batting Pair Selection */}
+              {/* Batting Pair Selection - Shows as full focus when no pair is selected */}
               {showPairSelection && (
                 <div style={{
                   background: 'linear-gradient(135deg, #fdbb2d, #f59e0b)',
-                  padding: '1.5rem',
-                  borderRadius: '10px',
+                  padding: '2rem',
+                  borderRadius: '15px',
                   marginBottom: '1.5rem',
-                  border: '3px solid #1a2a6c'
+                  border: '4px solid #1a2a6c',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
                 }}>
-                  <h4 style={{ color: '#1a2a6c', marginBottom: '1rem', fontWeight: 'bold' }}>
-                    Select Batting Pair (2 Overs)
-                  </h4>
+                  <h3 style={{ color: '#1a2a6c', marginBottom: '0.5rem', fontWeight: 'bold', textAlign: 'center', fontSize: '1.5rem' }}>
+                    Select Batting Pair
+                  </h3>
+                  <p style={{ color: '#1a2a6c', marginBottom: '1.5rem', textAlign: 'center', opacity: 0.8 }}>
+                    Choose two batsmen who will bat together for the next 2 overs
+                  </p>
 
                   <div className="form-group">
-                    <label className="form-label">Batsman 1</label>
+                    <label className="form-label">Batsman 1 *</label>
                     <select
                       className="form-select"
                       value={battingPair.player1}
                       onChange={(e) => setBattingPair({...battingPair, player1: e.target.value})}
+                      style={{ color: battingPair.player1 ? 'inherit' : '#6b7280' }}
                     >
-                      <option value="">Select Player 1</option>
+                      <option value="" disabled>-- Select Batsman 1 --</option>
                       {battingTeamPlayers.map(player => {
                         const isCompleted = hasPlayerCompletedOvers(player._id);
+                        const hasBatted = hasPlayerBatted(player._id);
                         const isSelectedAsPlayer2 = battingPair.player2 === player._id;
                         const isDisabled = isCompleted || isSelectedAsPlayer2;
+                        // Build status text
+                        let statusText = '';
+                        if (isCompleted) {
+                          statusText = ' (Completed)';
+                        } else if (hasBatted) {
+                          statusText = ' (Batted)';
+                        }
+                        if (isSelectedAsPlayer2) {
+                          statusText += ' (Selected as Player 2)';
+                        }
                         return (
                           <option
                             key={player._id}
                             value={player._id}
                             disabled={isDisabled}
-                            style={{ color: isCompleted ? '#999' : 'inherit' }}
+                            style={{ color: isCompleted ? '#999' : (hasBatted ? '#666' : 'inherit') }}
                           >
-                            {player.name}{isCompleted ? ' (Completed 2 overs)' : ''}{isSelectedAsPlayer2 ? ' (Selected as Player 2)' : ''}
+                            {player.name}{statusText}
                           </option>
                         );
                       })}
@@ -1124,25 +1155,37 @@ function LiveScore() {
                     )}
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Batsman 2</label>
+                    <label className="form-label">Batsman 2 *</label>
                     <select
                       className="form-select"
                       value={battingPair.player2}
                       onChange={(e) => setBattingPair({...battingPair, player2: e.target.value})}
+                      style={{ color: battingPair.player2 ? 'inherit' : '#6b7280' }}
                     >
-                      <option value="">Select Player 2</option>
+                      <option value="" disabled>-- Select Batsman 2 --</option>
                       {battingTeamPlayers.map(player => {
                         const isCompleted = hasPlayerCompletedOvers(player._id);
+                        const hasBatted = hasPlayerBatted(player._id);
                         const isSelectedAsPlayer1 = battingPair.player1 === player._id;
                         const isDisabled = isCompleted || isSelectedAsPlayer1;
+                        // Build status text
+                        let statusText = '';
+                        if (isCompleted) {
+                          statusText = ' (Completed)';
+                        } else if (hasBatted) {
+                          statusText = ' (Batted)';
+                        }
+                        if (isSelectedAsPlayer1) {
+                          statusText += ' (Selected as Player 1)';
+                        }
                         return (
                           <option
                             key={player._id}
                             value={player._id}
                             disabled={isDisabled}
-                            style={{ color: isCompleted ? '#999' : 'inherit' }}
+                            style={{ color: isCompleted ? '#999' : (hasBatted ? '#666' : 'inherit') }}
                           >
-                            {player.name}{isCompleted ? ' (Completed 2 overs)' : ''}{isSelectedAsPlayer1 ? ' (Selected as Player 1)' : ''}
+                            {player.name}{statusText}
                           </option>
                         );
                       })}
@@ -1163,12 +1206,15 @@ function LiveScore() {
                 </div>
               )}
 
+              {/* Scoring Interface - Only shown after batting pair is selected */}
+              {!showPairSelection && (
+              <>
               {/* Current Batting Pair Display */}
-              {battingPair.player1 && battingPair.player2 && !showPairSelection && (() => {
+              {battingPair.player1 && battingPair.player2 && (() => {
                 console.log('Rendering Current Pair - Player1:', battingPair.player1, 'Player2:', battingPair.player2, 'Striker:', striker);
                 return null;
               })()}
-              {battingPair.player1 && battingPair.player2 && !showPairSelection && (
+              {battingPair.player1 && battingPair.player2 && (
                 <div key={`${battingPair.player1}-${battingPair.player2}-${striker}`} style={{
                   background: 'linear-gradient(135deg, #10b981, #34d399)',
                   padding: '1rem',
@@ -1263,7 +1309,7 @@ function LiveScore() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Select Bowler</label>
+                <label className="form-label">Select Bowler *</label>
                 <select
                   className="form-select"
                   value={currentBowler}
@@ -1272,8 +1318,9 @@ function LiveScore() {
                     // Close the prompt when bowler is selected
                     setShowBowlerChangePrompt(false);
                   }}
+                  style={{ color: currentBowler ? 'inherit' : '#6b7280' }}
                 >
-                  <option value="">Select Bowler</option>
+                  <option value="" disabled>-- Select Bowler --</option>
                   {availableBowlers.map(player => {
                     const oversCompleted = getBowlerOvers(player._id);
                     const oversRemaining = maxOversPerBowler - oversCompleted;
@@ -1294,113 +1341,119 @@ function LiveScore() {
               {/* YYC Scoring Buttons */}
               <div style={{ marginBottom: '1.5rem' }}>
                 <label className="form-label" style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Quick Score</label>
-                {/* Row 1: Basic Runs */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  <button className="btn btn-secondary" onClick={() => handleQuickScore('dot')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                {/* Row 1: Basic Runs - 6 columns, wraps to 3 on mobile */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.4rem', marginTop: '0.5rem' }}>
+                  <button className="btn btn-secondary" onClick={() => handleQuickScore('dot')} style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem' }}>
                     Dot
                   </button>
-                  <button className="btn btn-primary" onClick={() => handleQuickScore('1')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                  <button className="btn btn-primary" onClick={() => handleQuickScore('1')} style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem' }}>
                     1
                   </button>
-                  <button className="btn btn-primary" onClick={() => handleQuickScore('2')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                  <button className="btn btn-primary" onClick={() => handleQuickScore('2')} style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem' }}>
                     2
                   </button>
-                  <button className="btn btn-primary" onClick={() => handleQuickScore('3')} style={{ padding: '0.8rem', fontSize: '1rem' }}>
+                  <button className="btn btn-primary" onClick={() => handleQuickScore('3')} style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem' }}>
                     3
                   </button>
-                  <button className="btn btn-success" onClick={() => handleQuickScore('4')} style={{ padding: '0.8rem', fontSize: '1rem', fontWeight: 'bold' }}>
+                  <button className="btn btn-success" onClick={() => handleQuickScore('4')} style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem', fontWeight: 'bold' }}>
                     4
                   </button>
-                  <button className="btn btn-success" onClick={() => handleQuickScore('6')} style={{ padding: '0.8rem', fontSize: '1rem', fontWeight: 'bold' }}>
+                  <button className="btn btn-success" onClick={() => handleQuickScore('6')} style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem', fontWeight: 'bold' }}>
                     6
                   </button>
                 </div>
-                {/* Row 2: 4 + runs combinations */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {/* Row 2: 4+runs combinations - 3 columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', marginTop: '0.5rem' }}>
                   <button
                     className="btn btn-info"
                     onClick={() => handleQuickScore('4+1')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0891b2', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.85rem', background: '#0891b2', color: 'white' }}
                   >
                     4+1
                   </button>
                   <button
                     className="btn btn-info"
                     onClick={() => handleQuickScore('4+2')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0891b2', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.85rem', background: '#0891b2', color: 'white' }}
                   >
                     4+2
                   </button>
                   <button
                     className="btn btn-info"
                     onClick={() => handleQuickScore('4+3')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0891b2', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.85rem', background: '#0891b2', color: 'white' }}
                   >
                     4+3
                   </button>
+                </div>
+                {/* Row 3: 6+runs combinations - 3 columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', marginTop: '0.4rem' }}>
                   <button
                     className="btn btn-warning"
                     onClick={() => handleQuickScore('6+1')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.85rem', background: '#f59e0b', color: 'white' }}
                   >
                     6+1
                   </button>
                   <button
                     className="btn btn-warning"
                     onClick={() => handleQuickScore('6+2')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.85rem', background: '#f59e0b', color: 'white' }}
                   >
                     6+2
                   </button>
                   <button
                     className="btn btn-warning"
                     onClick={() => handleQuickScore('6+3')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#f59e0b', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.85rem', background: '#f59e0b', color: 'white' }}
                   >
                     6+3
                   </button>
                 </div>
-                {/* Row 3: No Ball + 4 + runs combinations */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
+                {/* Row 4: NB+4+runs combinations - 3 columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', marginTop: '0.4rem' }}>
                   <button
                     className="btn"
                     onClick={() => handleQuickScore('nb+4+1')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0e7490', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.8rem', background: '#0e7490', color: 'white' }}
                   >
                     NB+4+1
                   </button>
                   <button
                     className="btn"
                     onClick={() => handleQuickScore('nb+4+2')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0e7490', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.8rem', background: '#0e7490', color: 'white' }}
                   >
                     NB+4+2
                   </button>
                   <button
                     className="btn"
                     onClick={() => handleQuickScore('nb+4+3')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#0e7490', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.8rem', background: '#0e7490', color: 'white' }}
                   >
                     NB+4+3
                   </button>
+                </div>
+                {/* Row 5: NB+6+runs combinations - 3 columns */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem', marginTop: '0.4rem' }}>
                   <button
                     className="btn"
                     onClick={() => handleQuickScore('nb+6+1')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#d97706', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.8rem', background: '#d97706', color: 'white' }}
                   >
                     NB+6+1
                   </button>
                   <button
                     className="btn"
                     onClick={() => handleQuickScore('nb+6+2')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#d97706', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.8rem', background: '#d97706', color: 'white' }}
                   >
                     NB+6+2
                   </button>
                   <button
                     className="btn"
                     onClick={() => handleQuickScore('nb+6+3')}
-                    style={{ padding: '0.8rem', fontSize: '0.9rem', background: '#d97706', color: 'white' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.8rem', background: '#d97706', color: 'white' }}
                   >
                     NB+6+3
                   </button>
@@ -1411,85 +1464,85 @@ function LiveScore() {
               <div style={{ marginBottom: '1.5rem' }}>
                 <label className="form-label" style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Extras</label>
                 {/* Row 1: Basic Wide and No Ball */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.4rem', marginTop: '0.5rem' }}>
                   <button
                     className="btn btn-danger"
                     onClick={() => handleQuickScore('wide')}
-                    style={{ padding: '0.8rem', fontSize: '1rem' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem' }}
                   >
                     Wide (4)
                   </button>
                   <button
                     className="btn btn-danger"
                     onClick={() => handleQuickScore('noball')}
-                    style={{ padding: '0.8rem', fontSize: '1rem' }}
+                    style={{ padding: '0.7rem 0.3rem', fontSize: '0.9rem' }}
                   >
                     No Ball (4)
                   </button>
                 </div>
                 {/* Row 2: Wide + additional runs */}
-                <div style={{ marginTop: '0.5rem' }}>
-                  <small style={{ color: '#6b7280', marginBottom: '0.25rem', display: 'block' }}>Wide + Runs (4 to extras, runs to batsman)</small>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                <div style={{ marginTop: '0.4rem' }}>
+                  <small style={{ color: '#6b7280', marginBottom: '0.25rem', display: 'block', fontSize: '0.75rem' }}>Wide + Runs (4 to extras, runs to batsman)</small>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('wide+1')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#dc2626', color: 'white' }}
                     >
                       Wd+1
                     </button>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('wide+2')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#dc2626', color: 'white' }}
                     >
                       Wd+2
                     </button>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('wide+3')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#dc2626', color: 'white' }}
                     >
                       Wd+3
                     </button>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('wide+4')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#dc2626', color: 'white' }}
                     >
                       Wd+4
                     </button>
                   </div>
                 </div>
                 {/* Row 3: No Ball + additional runs */}
-                <div style={{ marginTop: '0.5rem' }}>
-                  <small style={{ color: '#6b7280', marginBottom: '0.25rem', display: 'block' }}>No Ball + Runs (4 to extras, runs to batsman)</small>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                <div style={{ marginTop: '0.4rem' }}>
+                  <small style={{ color: '#6b7280', marginBottom: '0.25rem', display: 'block', fontSize: '0.75rem' }}>No Ball + Runs (4 to extras, runs to batsman)</small>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('noball+1')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#b91c1c', color: 'white' }}
                     >
                       NB+1
                     </button>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('noball+2')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#b91c1c', color: 'white' }}
                     >
                       NB+2
                     </button>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('noball+3')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#b91c1c', color: 'white' }}
                     >
                       NB+3
                     </button>
                     <button
                       className="btn"
                       onClick={() => handleQuickScore('noball+4')}
-                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                      style={{ padding: '0.6rem 0.2rem', fontSize: '0.8rem', background: '#b91c1c', color: 'white' }}
                     >
                       NB+4
                     </button>
@@ -1553,6 +1606,8 @@ function LiveScore() {
                   Undo the last ball if entered incorrectly
                 </small>
               </div>
+              </>
+              )}
             </div>
             )}
           </>
