@@ -156,49 +156,6 @@ function LiveScore() {
     return !canFormNewPair;
   };
 
-  // Helper function to get available players for batting (exclude used pairs)
-  const getAvailableBatsmen = (teamPlayers) => {
-    if (!match || !match.innings || match.innings.length === 0) return teamPlayers;
-    const currentInnings = match.innings[match.currentInnings - 1];
-    if (!currentInnings || !currentInnings.battingScorecard) return teamPlayers;
-
-    // Get players who have already batted
-    const battedPlayers = currentInnings.battingScorecard.map(b => (b.player && b.player._id) || b.player);
-
-    // Return players who haven't batted yet, or have batted but can form a new valid pair
-    return teamPlayers.filter(player => {
-      // If player hasn't batted at all, they're available
-      if (!battedPlayers.includes(player._id)) return true;
-
-      // If player has batted, check if they can form a new unused pair
-      const canFormNewPair = teamPlayers.some(otherPlayer => {
-        if (otherPlayer._id === player._id) return false;
-        return !isPairUsed(player._id, otherPlayer._id);
-      });
-
-      return canFormNewPair;
-    });
-  };
-
-  // Helper function to get player status for display
-  const getPlayerBattingStatus = (playerId, includeColor = false) => {
-    if (hasPlayerCompletedOvers(playerId)) {
-      return includeColor ? ' 🔴 Completed' : ' ● Completed';
-    }
-
-    // Check if player has batted but can still form new pairs
-    if (!match || !match.innings || match.innings.length === 0) return includeColor ? ' 🟢 Available' : ' ● Available';
-    const currentInnings = match.innings[match.currentInnings - 1];
-    if (!currentInnings || !currentInnings.battingScorecard) return includeColor ? ' 🟢 Available' : ' ● Available';
-    const battedPlayers = currentInnings.battingScorecard.map(b => (b.player && b.player._id) || b.player);
-
-    if (battedPlayers.includes(playerId)) {
-      return includeColor ? ' 🟡 Batted' : ' ● Batted';
-    }
-
-    return includeColor ? ' 🟢 Available' : ' ● Available';
-  };
-
   const handleStartMatch = async (e) => {
     e.preventDefault();
 
@@ -652,9 +609,6 @@ function LiveScore() {
   const bowlingTeamPlayers = allPlayers.filter(
     p => currentInnings && p.team && p.team._id === currentInnings.bowlingTeam?.toString()
   );
-
-  // Get available batsmen (filter out players who can't form new pairs)
-  const availableBatsmen = getAvailableBatsmen(battingTeamPlayers);
 
   // Get available bowlers (filter out those who bowled 2 overs already)
   const maxOversPerBowler = 2;
