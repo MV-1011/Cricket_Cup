@@ -8,6 +8,7 @@ router.post('/:id/start', matchController.startMatch);
 router.post('/:id/ball', matchController.updateBallByBall);
 router.delete('/:id/ball/last', matchController.undoLastBall);
 router.post('/:id/restart', matchController.restartMatch);
+router.post('/:id/tiebreaker', matchController.setTiebreakerWinner);
 router.get('/:id', matchController.getMatchById);
 router.post('/', matchController.createMatch);
 router.put('/:id', matchController.updateMatch);

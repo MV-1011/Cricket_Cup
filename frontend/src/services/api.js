@@ -43,15 +43,15 @@ export const matchAPI = {
   undoLastBall: (id) => api.delete(`/matches/${id}/ball/last`),
   getLiveMatches: () => api.get('/matches/live'),
   restartMatch: (id) => api.post(`/matches/${id}/restart`),
+  setTiebreakerWinner: (id, winnerId) => api.post(`/matches/${id}/tiebreaker`, { winnerId }),
 };
 
-// Group APIs
-export const groupAPI = {
-  getAll: () => api.get('/groups'),
-  getById: (id) => api.get(`/groups/${id}`),
-  create: (data) => api.post('/groups', data),
-  update: (id, data) => api.put(`/groups/${id}`, data),
-  delete: (id) => api.delete(`/groups/${id}`),
+// Auth APIs
+export const authAPI = {
+  login: (data) => api.post('/auth/login', data),
+  getUser: (userId) => api.get(`/auth/user/${userId}`),
+  getAllUsers: () => api.get('/auth/users'),
+  updateUser: (id, data) => api.put(`/auth/user/${id}`, data),
 };
 
 // Tournament APIs

@@ -8,6 +8,7 @@ function Players() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
+    sid: '',
     team: ''
   });
   const [editingId, setEditingId] = useState(null);
@@ -45,7 +46,7 @@ function Players() {
       } else {
         await playerAPI.create(formData);
       }
-      setFormData({ name: '', team: '' });
+      setFormData({ name: '', sid: '', team: '' });
       setEditingId(null);
       setShowForm(false);
       fetchPlayers();
@@ -58,6 +59,7 @@ function Players() {
   const handleEdit = (player) => {
     setFormData({
       name: player.name,
+      sid: player.sid || '',
       team: player.team?._id || ''
     });
     setEditingId(player._id);
@@ -90,7 +92,7 @@ function Players() {
             onClick={() => {
               setShowForm(!showForm);
               setEditingId(null);
-              setFormData({ name: '', team: '' });
+              setFormData({ name: '', sid: '', team: '' });
             }}
           >
             {showForm ? 'Cancel' : 'Add Player'}
@@ -107,6 +109,16 @@ function Players() {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">SID (Student ID)</label>
+              <input
+                type="text"
+                className="form-control"
+                value={formData.sid}
+                onChange={(e) => setFormData({ ...formData, sid: e.target.value })}
+                placeholder="Optional"
               />
             </div>
             <div className="form-group">
@@ -131,50 +143,54 @@ function Players() {
           </form>
         )}
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Team</th>
-              <th>Batting Avg</th>
-              <th>Bowling Avg</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {players.length === 0 ? (
+        <div className="table-wrapper">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
-                  No players found. Click "Add Player" to create your first player.
-                </td>
+                <th>Name</th>
+                <th>SID</th>
+                <th>Team</th>
+                <th>Batting Avg</th>
+                <th>Bowling Avg</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              players.map(player => (
-                <tr key={player._id}>
-                  <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.name || 'N/A'}</td>
-                  <td>{player.battingStats.average || '0.00'}</td>
-                  <td>{player.bowlingStats.average || '0.00'}</td>
-                  <td>
-                    <button
-                      className="btn btn-primary"
-                      style={{ marginRight: '0.5rem' }}
-                      onClick={() => handleEdit(player)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDelete(player._id)}
-                    >
-                      Delete
-                    </button>
+            </thead>
+            <tbody>
+              {players.length === 0 ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                    No players found. Click "Add Player" to create your first player.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                players.map(player => (
+                  <tr key={player._id}>
+                    <td><strong>{player.name}</strong></td>
+                    <td>{player.sid || '-'}</td>
+                    <td>{player.team?.name || 'N/A'}</td>
+                    <td>{player.battingStats.average || '0.00'}</td>
+                    <td>{player.bowlingStats.average || '0.00'}</td>
+                    <td>
+                      <button
+                        className="btn btn-primary"
+                        style={{ marginRight: '0.5rem' }}
+                        onClick={() => handleEdit(player)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleDelete(player._id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

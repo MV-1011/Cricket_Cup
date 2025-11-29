@@ -281,58 +281,58 @@ function Matches() {
           </form>
         )}
 
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Match #</th>
-              <th>Teams</th>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Status</th>
-              <th>Result</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {matches.length === 0 ? (
+        <div className="table-wrapper">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
-                  No matches found. Click "Add Match" to create your first match.
-                </td>
+                <th>Match #</th>
+                <th>Teams</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Result</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              matches.map(match => (
-                <tr key={match._id}>
-                  <td><strong>{match.matchNumber}</strong></td>
-                  <td>
-                    {match.team1?.name || 'Unknown'} vs {match.team2?.name || 'Unknown'}
-                  </td>
-                  <td>{new Date(match.date).toLocaleDateString()}</td>
-                  <td>{match.time || '-'}</td>
-                  <td>
-                    <span style={getStatusBadge(match.status)}>
-                      {match.status.toUpperCase()}
-                    </span>
-                  </td>
-                  <td>{match.resultText || '-'}</td>
-                  <td>
-                    <Link to={`/match/${match._id}`}>
-                      <button className="btn btn-primary" style={{ marginRight: '0.5rem' }}>
-                        {match.status === 'scheduled' ? 'Start' : 'View'}
-                      </button>
-                    </Link>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDelete(match._id)}
-                    >
-                      Delete
-                    </button>
+            </thead>
+            <tbody>
+              {matches.length === 0 ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>
+                    No matches found. Click "Add Match" to create your first match.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                matches.map(match => (
+                  <tr key={match._id}>
+                    <td><strong>{match.matchNumber}</strong></td>
+                    <td>
+                      {match.team1?.name || 'Unknown'} vs {match.team2?.name || 'Unknown'}
+                    </td>
+                    <td>{new Date(match.date).toLocaleDateString()}</td>
+                    <td>
+                      <span style={getStatusBadge(match.status)}>
+                        {match.status.toUpperCase()}
+                      </span>
+                    </td>
+                    <td>{match.resultText || '-'}</td>
+                    <td>
+                      <Link to={`/match/${match._id}`}>
+                        <button className="btn btn-primary" style={{ marginRight: '0.5rem' }}>
+                          {match.status === 'scheduled' ? 'Start' : 'View'}
+                        </button>
+                      </Link>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleDelete(match._id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

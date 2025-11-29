@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { teamAPI, playerAPI, groupAPI } from '../services/api';
+import { teamAPI, playerAPI } from '../services/api';
 
 function Teams() {
   const [teams, setTeams] = useState([]);
-  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    logo: '',
-    group: ''
+    logo: ''
   });
   const [editingId, setEditingId] = useState(null);
   const [expandedTeamId, setExpandedTeamId] = useState(null);
@@ -23,7 +21,6 @@ function Teams() {
 
   useEffect(() => {
     fetchTeams();
-    fetchGroups();
   }, []);
 
   const fetchTeams = async () => {
@@ -37,15 +34,6 @@ function Teams() {
     }
   };
 
-  const fetchGroups = async () => {
-    try {
-      const response = await groupAPI.getAll();
-      setGroups(response.data);
-    } catch (error) {
-      console.error('Error fetching groups:', error);
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -54,7 +42,7 @@ function Teams() {
       } else {
         await teamAPI.create(formData);
       }
-      setFormData({ name: '', logo: '', group: groups.length > 0 ? groups[0].name : '' });
+      setFormData({ name: '', logo: '' });
       setEditingId(null);
       setShowForm(false);
       fetchTeams();
@@ -67,8 +55,7 @@ function Teams() {
   const handleEdit = (team) => {
     setFormData({
       name: team.name,
-      logo: team.logo,
-      group: team.group || ''
+      logo: team.logo || ''
     });
     setEditingId(team._id);
     setShowForm(true);
@@ -170,7 +157,7 @@ function Teams() {
             onClick={() => {
               setShowForm(!showForm);
               setEditingId(null);
-              setFormData({ name: '', logo: '', group: '' });
+              setFormData({ name: '', logo: '' });
             }}
           >
             {showForm ? 'Cancel' : 'Add Team'}
@@ -197,21 +184,6 @@ function Teams() {
                 value={formData.logo}
                 onChange={(e) => setFormData({ ...formData, logo: e.target.value })}
               />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Group (optional)</label>
-              <select
-                className="form-control"
-                value={formData.group}
-                onChange={(e) => setFormData({ ...formData, group: e.target.value })}
-              >
-                <option value="">No Group</option>
-                {groups.map(group => (
-                  <option key={group._id} value={group.name}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
             </div>
             <button type="submit" className="btn btn-success">
               {editingId ? 'Update Team' : 'Create Team'}
@@ -369,43 +341,45 @@ function Teams() {
                   )}
 
                   {players.length > 0 ? (
-                    <table className="table">
-                      <thead>
-                        <tr>
-                          <th>SID</th>
-                          <th>Name</th>
-                          <th>Batting Avg</th>
-                          <th>Bowling Avg</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {players.map((player) => (
-                          <tr key={player._id}>
-                            <td><strong>{player.sid}</strong></td>
-                            <td><strong>{player.name}</strong></td>
-                            <td>{player.battingStats?.average || '0.00'}</td>
-                            <td>{player.bowlingStats?.average || '0.00'}</td>
-                            <td>
-                              <button
-                                className="btn btn-primary"
-                                style={{ marginRight: '0.5rem', padding: '0.5rem 1rem' }}
-                                onClick={() => handleEditPlayer(player)}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                className="btn btn-danger"
-                                style={{ padding: '0.5rem 1rem' }}
-                                onClick={() => handleDeletePlayer(player._id)}
-                              >
-                                Delete
-                              </button>
-                            </td>
+                    <div className="table-wrapper">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>SID</th>
+                            <th>Name</th>
+                            <th>Batting Avg</th>
+                            <th>Bowling Avg</th>
+                            <th>Actions</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {players.map((player) => (
+                            <tr key={player._id}>
+                              <td><strong>{player.sid}</strong></td>
+                              <td><strong>{player.name}</strong></td>
+                              <td>{player.battingStats?.average || '0.00'}</td>
+                              <td>{player.bowlingStats?.average || '0.00'}</td>
+                              <td>
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ marginRight: '0.5rem', padding: '0.5rem 1rem' }}
+                                  onClick={() => handleEditPlayer(player)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="btn btn-danger"
+                                  style={{ padding: '0.5rem 1rem' }}
+                                  onClick={() => handleDeletePlayer(player._id)}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   ) : (
                     <div style={{
                       textAlign: 'center',

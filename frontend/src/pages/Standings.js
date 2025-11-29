@@ -153,9 +153,9 @@ function Standings() {
           {/* Check if tournament has groups with standings */}
           {selectedTournament.groups && selectedTournament.groups.length > 0 ? (
             // Display standings by group
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '1.5rem' }}>
               {selectedTournament.groups.map((group, index) => (
-                <div key={index} className="card">
+                <div key={index} className="card" style={{ overflow: 'hidden' }}>
                   <div className="card-header" style={{
                     background: 'linear-gradient(135deg, #1a2a6c, #2d4a9c)',
                     color: 'white',
@@ -164,55 +164,65 @@ function Standings() {
                   }}>
                     {group.name}
                   </div>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Team</th>
-                        <th>P</th>
-                        <th>W</th>
-                        <th>L</th>
-                        <th>Pts</th>
-                        <th>NRR</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.standings
-                        ?.sort((a, b) => {
-                          if (b.points !== a.points) return b.points - a.points;
-                          return (b.netRunRate || 0) - (a.netRunRate || 0);
-                        })
-                        .map((standing, i) => (
-                          <tr key={i} style={{
-                            background: i < 2 ? 'rgba(16, 185, 129, 0.1)' : 'transparent'
-                          }}>
-                            <td>
-                              <strong style={{
-                                fontSize: '1.1rem',
-                                color: i === 0 ? '#fdbb2d' : i === 1 ? '#94a3b8' : '#1a2a6c'
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="table" style={{ minWidth: '380px', fontSize: '0.95rem' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', width: '35px' }}>#</th>
+                          <th style={{ padding: '0.6rem 0.5rem', minWidth: '120px' }}>Team</th>
+                          <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', width: '40px' }}>P</th>
+                          <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', width: '40px' }}>W</th>
+                          <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', width: '40px' }}>L</th>
+                          <th style={{ padding: '0.6rem 0.5rem', textAlign: 'center', width: '45px' }}>Pts</th>
+                          <th style={{ padding: '0.6rem 0.5rem', textAlign: 'right', width: '75px' }}>NRR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.standings
+                          ?.sort((a, b) => {
+                            if (b.points !== a.points) return b.points - a.points;
+                            return (b.netRunRate || 0) - (a.netRunRate || 0);
+                          })
+                          .map((standing, i) => (
+                            <tr key={i} style={{
+                              background: i < 2 ? 'rgba(16, 185, 129, 0.1)' : 'transparent'
+                            }}>
+                              <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>
+                                <strong style={{
+                                  fontSize: '1.1rem',
+                                  color: i === 0 ? '#fdbb2d' : i === 1 ? '#94a3b8' : '#1a2a6c'
+                                }}>
+                                  {i + 1}
+                                </strong>
+                              </td>
+                              <td style={{ padding: '0.6rem 0.5rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }} title={getTeamName(standing.team)}>
+                                <strong>{getTeamName(standing.team)}</strong>
+                              </td>
+                              <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}>{standing.played || 0}</td>
+                              <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center', color: '#10b981', fontWeight: '600' }}>{standing.won || 0}</td>
+                              <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center', color: '#dc3545', fontWeight: '600' }}>{standing.lost || 0}</td>
+                              <td style={{ padding: '0.6rem 0.5rem', textAlign: 'center' }}><strong style={{ fontSize: '1.1rem', color: '#1a2a6c' }}>{standing.points || 0}</strong></td>
+                              <td style={{
+                                padding: '0.6rem 0.5rem',
+                                textAlign: 'right',
+                                fontFamily: 'monospace',
+                                fontSize: '0.9rem',
+                                color: (standing.netRunRate || 0) >= 0 ? '#10b981' : '#dc3545'
                               }}>
-                                {i + 1}
-                              </strong>
-                            </td>
-                            <td><strong>{getTeamName(standing.team)}</strong></td>
-                            <td>{standing.played || 0}</td>
-                            <td style={{ color: '#10b981', fontWeight: '600' }}>{standing.won || 0}</td>
-                            <td style={{ color: '#dc3545', fontWeight: '600' }}>{standing.lost || 0}</td>
-                            <td><strong style={{ fontSize: '1.1rem', color: '#1a2a6c' }}>{standing.points || 0}</strong></td>
-                            <td style={{ color: (standing.netRunRate || 0) >= 0 ? '#10b981' : '#dc3545' }}>
-                              {(standing.netRunRate || 0) >= 0 ? '+' : ''}{(standing.netRunRate || 0).toFixed(3)}
+                                {(standing.netRunRate || 0) >= 0 ? '+' : ''}{(standing.netRunRate || 0).toFixed(3)}
+                              </td>
+                            </tr>
+                          ))}
+                        {(!group.standings || group.standings.length === 0) && (
+                          <tr>
+                            <td colSpan="7" style={{ textAlign: 'center', color: '#9ca3af', padding: '2rem' }}>
+                              No teams in this group yet
                             </td>
                           </tr>
-                        ))}
-                      {(!group.standings || group.standings.length === 0) && (
-                        <tr>
-                          <td colSpan="7" style={{ textAlign: 'center', color: '#9ca3af', padding: '2rem' }}>
-                            No teams in this group yet
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                   {/* Qualification indicator */}
                   <div style={{
                     padding: '0.75rem 1rem',
@@ -244,8 +254,9 @@ function Standings() {
             </div>
           )}
 
-          {/* Knockout Qualification Summary */}
-          {selectedTournament.groups && selectedTournament.groups.length > 0 && selectedTournament.status !== 'planned' && (
+          {/* Knockout Qualification Summary - only show when knockout stage has started */}
+          {selectedTournament.groups && selectedTournament.groups.length > 0 &&
+           (selectedTournament.status === 'knockout-stage' || selectedTournament.status === 'completed') && (
             <div className="card" style={{ marginTop: '2rem' }}>
               <div className="card-header" style={{
                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',

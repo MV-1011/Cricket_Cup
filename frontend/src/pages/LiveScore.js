@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { matchAPI, playerAPI } from '../services/api';
+import { matchAPI, playerAPI, tournamentAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import io from 'socket.io-client';
 
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || window.location.origin;
@@ -8,6 +9,8 @@ const socket = io(SOCKET_URL);
 
 function LiveScore() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const canScore = user?.role === 'admin' || user?.role === 'scorer';
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [allPlayers, setAllPlayers] = useState([]);
@@ -375,6 +378,48 @@ function LiveScore() {
         ballData.extraType = 'noball';
         ballData.extras = 4;
         break;
+      // Wide + additional runs (1-4 runs go to batsman, 4 runs go to extras)
+      case 'wide+1':
+        ballData.extraType = 'wide';
+        ballData.extras = 4; // Wide penalty goes to extras
+        ballData.runs = 1; // 1 run goes to batsman
+        break;
+      case 'wide+2':
+        ballData.extraType = 'wide';
+        ballData.extras = 4;
+        ballData.runs = 2;
+        break;
+      case 'wide+3':
+        ballData.extraType = 'wide';
+        ballData.extras = 4;
+        ballData.runs = 3;
+        break;
+      case 'wide+4':
+        ballData.extraType = 'wide';
+        ballData.extras = 4;
+        ballData.runs = 4;
+        break;
+      // No Ball + additional runs (1-4 runs go to batsman, 4 runs go to extras)
+      case 'noball+1':
+        ballData.extraType = 'noball';
+        ballData.extras = 4; // No ball penalty goes to extras
+        ballData.runs = 1; // 1 run goes to batsman
+        break;
+      case 'noball+2':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 2;
+        break;
+      case 'noball+3':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 3;
+        break;
+      case 'noball+4':
+        ballData.extraType = 'noball';
+        ballData.extras = 4;
+        ballData.runs = 4;
+        break;
       // No Ball + Six + Additional Runs
       case 'nb+6+1':
         ballData.extraType = 'noball';
@@ -622,13 +667,15 @@ function LiveScore() {
       <div className="card">
         <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Match {match.matchNumber}: {match.team1.name} vs {match.team2.name}</span>
-          <button
-            className="btn btn-danger"
-            onClick={handleRestartMatch}
-            style={{ padding: '0.5rem 1rem' }}
-          >
-            🔄 Restart Match
-          </button>
+          {canScore && (
+            <button
+              className="btn btn-danger"
+              onClick={handleRestartMatch}
+              style={{ padding: '0.5rem 1rem' }}
+            >
+              🔄 Restart Match
+            </button>
+          )}
         </div>
 
         {match.status === 'scheduled' && (
@@ -636,11 +683,12 @@ function LiveScore() {
             <p>Match is scheduled for {new Date(match.date).toLocaleDateString()}</p>
             {match.time && <p>Time: {match.time}</p>}
 
-            {!showTossDialog ? (
-              <button className="btn btn-success" onClick={() => setShowTossDialog(true)}>
-                Start Match
-              </button>
-            ) : (
+            {canScore && (
+              !showTossDialog ? (
+                <button className="btn btn-success" onClick={() => setShowTossDialog(true)}>
+                  Start Match
+                </button>
+              ) : (
               <div style={{
                 background: 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
                 padding: '2rem',
@@ -707,14 +755,276 @@ function LiveScore() {
                   </div>
                 </form>
               </div>
+            ))}
+            {!canScore && (
+              <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                You don't have permission to start this match.
+              </p>
             )}
           </div>
         )}
 
         {match.status === 'completed' && (
-          <div style={{ background: '#10b981', color: 'white', padding: '2rem', borderRadius: '10px' }}>
-            <h2>Match Completed</h2>
-            <h3>{match.resultText}</h3>
+          <div>
+            {/* Match Result Header */}
+            <div style={{
+              background: match.winner ? '#10b981' : '#f59e0b',
+              color: 'white',
+              padding: '2rem',
+              borderRadius: '10px',
+              marginBottom: '1.5rem'
+            }}>
+              <h2>Match Completed</h2>
+              <h3>{match.resultText}</h3>
+            </div>
+
+            {/* Tie-breaker Selection (only if match is tied with no winner) */}
+            {!match.winner && match.innings && match.innings[0]?.runs === match.innings[1]?.runs && (
+              <div style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                padding: '1.5rem',
+                borderRadius: '10px',
+                marginBottom: '1.5rem',
+                border: '3px solid #b45309'
+              }}>
+                <h3 style={{ color: 'white', marginBottom: '1rem' }}>Match Tied! Select Tie-breaker Winner</h3>
+                <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                  <button
+                    className="btn btn-success"
+                    onClick={async () => {
+                      try {
+                        await matchAPI.setTiebreakerWinner(id, match.team1._id);
+                        // Update tournament standings if part of tournament
+                        if (match.tournament) {
+                          try {
+                            if (match.stage === 'group') {
+                              await tournamentAPI.updateGroupStandings(id);
+                            } else if (['quarterfinal', 'semifinal', 'final'].includes(match.stage)) {
+                              await tournamentAPI.advanceKnockoutWinner(id);
+                            }
+                          } catch (err) {
+                            console.log('Tournament update skipped:', err.message);
+                          }
+                        }
+                        fetchMatch();
+                        alert(`${match.team1.name} selected as winner!`);
+                      } catch (error) {
+                        alert('Error setting winner: ' + (error.response?.data?.message || error.message));
+                      }
+                    }}
+                    style={{ padding: '1rem 2rem', fontSize: '1.1rem', fontWeight: 'bold' }}
+                  >
+                    {match.team1.name} Wins
+                  </button>
+                  <button
+                    className="btn btn-success"
+                    onClick={async () => {
+                      try {
+                        await matchAPI.setTiebreakerWinner(id, match.team2._id);
+                        // Update tournament standings if part of tournament
+                        if (match.tournament) {
+                          try {
+                            if (match.stage === 'group') {
+                              await tournamentAPI.updateGroupStandings(id);
+                            } else if (['quarterfinal', 'semifinal', 'final'].includes(match.stage)) {
+                              await tournamentAPI.advanceKnockoutWinner(id);
+                            }
+                          } catch (err) {
+                            console.log('Tournament update skipped:', err.message);
+                          }
+                        }
+                        fetchMatch();
+                        alert(`${match.team2.name} selected as winner!`);
+                      } catch (error) {
+                        alert('Error setting winner: ' + (error.response?.data?.message || error.message));
+                      }
+                    }}
+                    style={{ padding: '1rem 2rem', fontSize: '1.1rem', fontWeight: 'bold' }}
+                  >
+                    {match.team2.name} Wins
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Both Innings Summary */}
+            {match.innings && match.innings.length >= 2 && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: '1.5rem',
+                marginBottom: '1.5rem'
+              }}>
+                {/* First Innings Summary */}
+                <div style={{
+                  background: 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
+                  padding: '1.5rem',
+                  borderRadius: '10px',
+                  border: '2px solid #1a2a6c'
+                }}>
+                  <h4 style={{ color: '#1a2a6c', marginBottom: '1rem', borderBottom: '2px solid #fdbb2d', paddingBottom: '0.5rem' }}>
+                    1st Innings: {match.innings[0].battingTeam === match.team1._id ? match.team1.name : match.team2.name}
+                  </h4>
+                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1a2a6c', marginBottom: '0.5rem' }}>
+                    {match.innings[0].runs}/{match.innings[0].wickets}
+                  </div>
+                  <div style={{ color: '#6b7280' }}>
+                    {match.innings[0].balls === 0 ? '0.0' : `${Math.floor((match.innings[0].balls - 1) / 4)}.${((match.innings[0].balls - 1) % 4) + 1}`} overs
+                  </div>
+                  <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#374151' }}>
+                    <strong>Extras:</strong> {match.innings[0].extras}
+                  </div>
+                </div>
+
+                {/* Second Innings Summary */}
+                <div style={{
+                  background: 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)',
+                  padding: '1.5rem',
+                  borderRadius: '10px',
+                  border: '2px solid #1a2a6c'
+                }}>
+                  <h4 style={{ color: '#1a2a6c', marginBottom: '1rem', borderBottom: '2px solid #fdbb2d', paddingBottom: '0.5rem' }}>
+                    2nd Innings: {match.innings[1].battingTeam === match.team1._id ? match.team1.name : match.team2.name}
+                  </h4>
+                  <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1a2a6c', marginBottom: '0.5rem' }}>
+                    {match.innings[1].runs}/{match.innings[1].wickets}
+                  </div>
+                  <div style={{ color: '#6b7280' }}>
+                    {match.innings[1].balls === 0 ? '0.0' : `${Math.floor((match.innings[1].balls - 1) / 4)}.${((match.innings[1].balls - 1) % 4) + 1}`} overs
+                  </div>
+                  <div style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#374151' }}>
+                    <strong>Extras:</strong> {match.innings[1].extras}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Full Scorecards for Completed Match */}
+            {match.innings && match.innings.length >= 2 && (
+              <>
+                {/* First Innings Scorecard */}
+                <div className="card" style={{ marginBottom: '1.5rem' }}>
+                  <div className="card-header" style={{ background: '#1a2a6c', color: 'white' }}>
+                    1st Innings Scorecard - {match.innings[0].battingTeam === match.team1._id ? match.team1.name : match.team2.name}
+                  </div>
+                  <div className="scorecard">
+                    <div className="scorecard-section">
+                      <h4>Batting</h4>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Player</th>
+                            <th>Runs</th>
+                            <th>Balls</th>
+                            <th>4s</th>
+                            <th>6s</th>
+                            <th>SR</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {match.innings[0].battingScorecard.map((batting, idx) => (
+                            <tr key={idx}>
+                              <td>{batting.player?.name || 'Player'}</td>
+                              <td><strong>{batting.runs}</strong></td>
+                              <td>{batting.balls}</td>
+                              <td>{batting.fours}</td>
+                              <td>{batting.sixes}</td>
+                              <td>{batting.strikeRate}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="scorecard-section">
+                      <h4>Bowling</h4>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Player</th>
+                            <th>Overs</th>
+                            <th>Runs</th>
+                            <th>Wickets</th>
+                            <th>Economy</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {match.innings[0].bowlingScorecard.map((bowling, idx) => (
+                            <tr key={idx}>
+                              <td>{bowling.player?.name || 'Player'}</td>
+                              <td>{bowling.overs.toFixed(1)}</td>
+                              <td>{bowling.runs}</td>
+                              <td><strong>{bowling.wickets}</strong></td>
+                              <td>{bowling.economy}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Second Innings Scorecard */}
+                <div className="card">
+                  <div className="card-header" style={{ background: '#1a2a6c', color: 'white' }}>
+                    2nd Innings Scorecard - {match.innings[1].battingTeam === match.team1._id ? match.team1.name : match.team2.name}
+                  </div>
+                  <div className="scorecard">
+                    <div className="scorecard-section">
+                      <h4>Batting</h4>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Player</th>
+                            <th>Runs</th>
+                            <th>Balls</th>
+                            <th>4s</th>
+                            <th>6s</th>
+                            <th>SR</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {match.innings[1].battingScorecard.map((batting, idx) => (
+                            <tr key={idx}>
+                              <td>{batting.player?.name || 'Player'}</td>
+                              <td><strong>{batting.runs}</strong></td>
+                              <td>{batting.balls}</td>
+                              <td>{batting.fours}</td>
+                              <td>{batting.sixes}</td>
+                              <td>{batting.strikeRate}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="scorecard-section">
+                      <h4>Bowling</h4>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>Player</th>
+                            <th>Overs</th>
+                            <th>Runs</th>
+                            <th>Wickets</th>
+                            <th>Economy</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {match.innings[1].bowlingScorecard.map((bowling, idx) => (
+                            <tr key={idx}>
+                              <td>{bowling.player?.name || 'Player'}</td>
+                              <td>{bowling.overs.toFixed(1)}</td>
+                              <td>{bowling.runs}</td>
+                              <td><strong>{bowling.wickets}</strong></td>
+                              <td>{bowling.economy}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -741,7 +1051,8 @@ function LiveScore() {
               </div>
             </div>
 
-            {/* Score Input Interface */}
+            {/* Score Input Interface - Only for scorers and admins */}
+            {canScore && (
             <div className="score-input">
               <h3 style={{ marginBottom: '1.5rem', color: '#667eea' }}>Score Input</h3>
 
@@ -1098,22 +1409,91 @@ function LiveScore() {
 
               {/* Extras */}
               <div style={{ marginBottom: '1.5rem' }}>
-                <label className="form-label" style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Extras (4 runs each)</label>
+                <label className="form-label" style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Extras</label>
+                {/* Row 1: Basic Wide and No Ball */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <button
                     className="btn btn-danger"
                     onClick={() => handleQuickScore('wide')}
-                    style={{ padding: '1rem', fontSize: '1.1rem' }}
+                    style={{ padding: '0.8rem', fontSize: '1rem' }}
                   >
-                    Wide (4 runs)
+                    Wide (4)
                   </button>
                   <button
                     className="btn btn-danger"
                     onClick={() => handleQuickScore('noball')}
-                    style={{ padding: '1rem', fontSize: '1.1rem' }}
+                    style={{ padding: '0.8rem', fontSize: '1rem' }}
                   >
-                    No Ball (4 runs)
+                    No Ball (4)
                   </button>
+                </div>
+                {/* Row 2: Wide + additional runs */}
+                <div style={{ marginTop: '0.5rem' }}>
+                  <small style={{ color: '#6b7280', marginBottom: '0.25rem', display: 'block' }}>Wide + Runs (4 to extras, runs to batsman)</small>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('wide+1')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                    >
+                      Wd+1
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('wide+2')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                    >
+                      Wd+2
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('wide+3')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                    >
+                      Wd+3
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('wide+4')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#dc2626', color: 'white' }}
+                    >
+                      Wd+4
+                    </button>
+                  </div>
+                </div>
+                {/* Row 3: No Ball + additional runs */}
+                <div style={{ marginTop: '0.5rem' }}>
+                  <small style={{ color: '#6b7280', marginBottom: '0.25rem', display: 'block' }}>No Ball + Runs (4 to extras, runs to batsman)</small>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem' }}>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('noball+1')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                    >
+                      NB+1
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('noball+2')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                    >
+                      NB+2
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('noball+3')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                    >
+                      NB+3
+                    </button>
+                    <button
+                      className="btn"
+                      onClick={() => handleQuickScore('noball+4')}
+                      style={{ padding: '0.6rem', fontSize: '0.85rem', background: '#b91c1c', color: 'white' }}
+                    >
+                      NB+4
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1174,6 +1554,7 @@ function LiveScore() {
                 </small>
               </div>
             </div>
+            )}
           </>
         )}
       </div>

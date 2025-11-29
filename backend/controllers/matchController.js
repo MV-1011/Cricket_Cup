@@ -1,6 +1,7 @@
 import Match from '../models/Match.js';
 import Team from '../models/Team.js';
 import Player from '../models/Player.js';
+import Tournament from '../models/Tournament.js';
 
 // Get all matches
 export const getAllMatches = async (req, res) => {
@@ -285,12 +286,13 @@ export const updateBallByBall = async (req, res) => {
     // Last 2 overs: wide/no-ball does NOT count (shouldReBowl = true)
 
     // YYC Rule: Only add runs if NOT a wicket (wicket = no runs counted)
-    // Batsmen can score off no balls (4 runs + any from bat)
+    // Batsmen can score off no balls AND wides (penalty goes to extras, but batsman runs are separate)
+    // When extraType is 'wide' or 'noball' AND there are runs, those runs go to batsman
     if (!isWicket) {
-      if (extraType === 'none' || extraType === 'noball') {
-        currentInnings.battingScorecard[batsmanIndex].runs += finalBoundaryRuns;
-        console.log(`Added ${finalBoundaryRuns} runs to batsman. New total: ${currentInnings.battingScorecard[batsmanIndex].runs}`);
-      }
+      // For all types (normal, wide, noball) - add runs to batsman
+      // The extras penalty (4 runs) already goes to extras, runs here are batsman's runs
+      currentInnings.battingScorecard[batsmanIndex].runs += finalBoundaryRuns;
+      console.log(`Added ${finalBoundaryRuns} runs to batsman. New total: ${currentInnings.battingScorecard[batsmanIndex].runs}`);
     }
 
     console.log('After ball updates - Batsman:', {
@@ -623,6 +625,98 @@ async function calculateMatchResult(match) {
       }
     }
   }
+
+  // Update tournament group standings if match is part of a tournament
+  if (match.tournament) {
+    try {
+      const tournament = await Tournament.findById(match.tournament);
+      if (tournament && match.stage === 'group' && match.groupName) {
+        // Find the group this match belongs to
+        const group = tournament.groups.find(g => g.name === match.groupName);
+        if (group) {
+          // Get team standings
+          const team1Standing = group.standings.find(s => s.team.toString() === match.team1.toString());
+          const team2Standing = group.standings.find(s => s.team.toString() === match.team2.toString());
+
+          if (team1Standing && team2Standing) {
+            // Determine which team batted first
+            const team1BattedFirst = innings1.battingTeam.toString() === match.team1.toString();
+
+            // Calculate overs as decimal
+            const oversToDecimal = (overs, balls) => {
+              const completedOvers = Math.floor(overs);
+              const partialBalls = balls % 4;
+              return completedOvers + (partialBalls / 4);
+            };
+
+            const innings1Overs = oversToDecimal(innings1.overs, innings1.balls);
+            const innings2Overs = oversToDecimal(innings2.overs, innings2.balls);
+
+            // Update team1 stats
+            if (team1BattedFirst) {
+              team1Standing.runsScored += innings1.runs;
+              team1Standing.runsConceded += innings2.runs;
+              team1Standing.oversPlayed += innings1Overs;
+              team1Standing.oversFaced += innings2Overs;
+            } else {
+              team1Standing.runsScored += innings2.runs;
+              team1Standing.runsConceded += innings1.runs;
+              team1Standing.oversPlayed += innings2Overs;
+              team1Standing.oversFaced += innings1Overs;
+            }
+
+            // Update team2 stats
+            if (!team1BattedFirst) {
+              team2Standing.runsScored += innings1.runs;
+              team2Standing.runsConceded += innings2.runs;
+              team2Standing.oversPlayed += innings1Overs;
+              team2Standing.oversFaced += innings2Overs;
+            } else {
+              team2Standing.runsScored += innings2.runs;
+              team2Standing.runsConceded += innings1.runs;
+              team2Standing.oversPlayed += innings2Overs;
+              team2Standing.oversFaced += innings1Overs;
+            }
+
+            // Update match counts and points
+            team1Standing.played += 1;
+            team2Standing.played += 1;
+
+            if (match.winner) {
+              if (match.winner.toString() === match.team1.toString()) {
+                team1Standing.won += 1;
+                team1Standing.points += 2;
+                team2Standing.lost += 1;
+              } else {
+                team2Standing.won += 1;
+                team2Standing.points += 2;
+                team1Standing.lost += 1;
+              }
+            } else {
+              // Tie - both get 1 point
+              team1Standing.points += 1;
+              team2Standing.points += 1;
+            }
+
+            // Calculate NRR for both teams
+            team1Standing.netRunRate = team1Standing.oversPlayed > 0 && team1Standing.oversFaced > 0
+              ? ((team1Standing.runsScored / team1Standing.oversPlayed) - (team1Standing.runsConceded / team1Standing.oversFaced))
+              : 0;
+
+            team2Standing.netRunRate = team2Standing.oversPlayed > 0 && team2Standing.oversFaced > 0
+              ? ((team2Standing.runsScored / team2Standing.oversPlayed) - (team2Standing.runsConceded / team2Standing.oversFaced))
+              : 0;
+
+            tournament.markModified('groups');
+            await tournament.save();
+            console.log(`Updated tournament group standings for ${match.groupName}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error updating tournament standings:', err.message);
+    }
+  }
 }
 
 // Get live matches
@@ -773,6 +867,72 @@ export const undoLastBall = async (req, res) => {
 
     await match.save();
     res.json({ message: 'Last ball undone successfully', match });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Set tie-breaker winner for tied matches
+export const setTiebreakerWinner = async (req, res) => {
+  try {
+    const { winnerId } = req.body;
+    const match = await Match.findById(req.params.id);
+
+    if (!match) {
+      return res.status(404).json({ message: 'Match not found' });
+    }
+
+    if (match.status !== 'completed') {
+      return res.status(400).json({ message: 'Match is not completed' });
+    }
+
+    // Verify the match was tied (no winner set)
+    if (match.winner) {
+      return res.status(400).json({ message: 'Match already has a winner' });
+    }
+
+    // Verify the winner is one of the teams
+    if (winnerId !== match.team1.toString() && winnerId !== match.team2.toString()) {
+      return res.status(400).json({ message: 'Winner must be one of the match teams' });
+    }
+
+    // Set the winner
+    match.winner = winnerId;
+
+    // Get team names for result text
+    const winner = await Team.findById(winnerId);
+    match.resultText = `${winner.name} won by tie-breaker`;
+
+    // Update team standings: remove the tie points, give win/loss
+    // First reverse the tie points (each team had +1 point for tie)
+    await Team.findByIdAndUpdate(match.team1, {
+      $inc: { points: -1 }
+    });
+    await Team.findByIdAndUpdate(match.team2, {
+      $inc: { points: -1 }
+    });
+
+    // Now give winner 2 points, loser 0
+    await Team.findByIdAndUpdate(winnerId, {
+      $inc: { matchesWon: 1, points: 2 }
+    });
+
+    const loserId = winnerId === match.team1.toString() ? match.team2 : match.team1;
+    await Team.findByIdAndUpdate(loserId, {
+      $inc: { matchesLost: 1 }
+    });
+
+    await match.save();
+
+    // Populate teams for response
+    await match.populate('team1', 'name');
+    await match.populate('team2', 'name');
+    await match.populate('winner', 'name');
+
+    res.json({
+      message: 'Tie-breaker winner set successfully',
+      match
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { playerAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import * as XLSX from 'xlsx';
 
 function TopPerformers() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [batsmen, setBatsmen] = useState([]);
   const [bowlers, setBowlers] = useState([]);
   const [allRounders, setAllRounders] = useState([]);
@@ -145,7 +148,7 @@ function TopPerformers() {
               (Ranked by Most Runs)
             </span>
           </div>
-          {batsmen.length > 0 && (
+          {isAdmin && batsmen.length > 0 && (
             <button
               onClick={exportBatsmen}
               className="btn btn-success"
@@ -156,47 +159,49 @@ function TopPerformers() {
           )}
         </div>
         {batsmen.length > 0 ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Player</th>
-                <th>Team</th>
-                <th>Innings</th>
-                <th>Runs</th>
-                <th>Highest</th>
-                <th>Average</th>
-                <th>Strike Rate</th>
-                <th>4s</th>
-                <th>6s</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batsmen.map((player, index) => (
-                <tr key={player._id} style={{
-                  background: index < 3 ? 'rgba(253, 187, 45, 0.1)' : 'transparent'
-                }}>
-                  <td>
-                    <strong style={{
-                      fontSize: '1.2rem',
-                      color: index === 0 ? '#fdbb2d' : index === 1 ? '#9ca3af' : index === 2 ? '#b87333' : '#1a2a6c'
-                    }}>
-                      {index + 1}
-                    </strong>
-                  </td>
-                  <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.name || 'N/A'}</td>
-                  <td>{player.battingStats.innings}</td>
-                  <td>{player.battingStats.runs}</td>
-                  <td>{player.battingStats.highestScore}</td>
-                  <td><strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>{player.battingStats.average}</strong></td>
-                  <td>{player.battingStats.strikeRate}</td>
-                  <td>{player.battingStats.fours}</td>
-                  <td>{player.battingStats.sixes}</td>
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Innings</th>
+                  <th>Runs</th>
+                  <th>Highest</th>
+                  <th>Average</th>
+                  <th>Strike Rate</th>
+                  <th>4s</th>
+                  <th>6s</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {batsmen.map((player, index) => (
+                  <tr key={player._id} style={{
+                    background: index < 3 ? 'rgba(253, 187, 45, 0.1)' : 'transparent'
+                  }}>
+                    <td>
+                      <strong style={{
+                        fontSize: '1.2rem',
+                        color: index === 0 ? '#fdbb2d' : index === 1 ? '#9ca3af' : index === 2 ? '#b87333' : '#1a2a6c'
+                      }}>
+                        {index + 1}
+                      </strong>
+                    </td>
+                    <td><strong>{player.name}</strong></td>
+                    <td>{player.team?.name || 'N/A'}</td>
+                    <td>{player.battingStats.innings}</td>
+                    <td>{player.battingStats.runs}</td>
+                    <td>{player.battingStats.highestScore}</td>
+                    <td><strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>{player.battingStats.average}</strong></td>
+                    <td>{player.battingStats.strikeRate}</td>
+                    <td>{player.battingStats.fours}</td>
+                    <td>{player.battingStats.sixes}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             No batsmen statistics available yet
@@ -213,7 +218,7 @@ function TopPerformers() {
               (Ranked by Economy Rate - Lower is Better)
             </span>
           </div>
-          {bowlers.length > 0 && (
+          {isAdmin && bowlers.length > 0 && (
             <button
               onClick={exportBowlers}
               className="btn btn-success"
@@ -224,45 +229,47 @@ function TopPerformers() {
           )}
         </div>
         {bowlers.length > 0 ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Player</th>
-                <th>Team</th>
-                <th>Innings</th>
-                <th>Wickets</th>
-                <th>Overs</th>
-                <th>Runs</th>
-                <th>Average</th>
-                <th>Economy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bowlers.map((player, index) => (
-                <tr key={player._id} style={{
-                  background: index < 3 ? 'rgba(253, 187, 45, 0.1)' : 'transparent'
-                }}>
-                  <td>
-                    <strong style={{
-                      fontSize: '1.2rem',
-                      color: index === 0 ? '#fdbb2d' : index === 1 ? '#9ca3af' : index === 2 ? '#b87333' : '#1a2a6c'
-                    }}>
-                      {index + 1}
-                    </strong>
-                  </td>
-                  <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.name || 'N/A'}</td>
-                  <td>{player.bowlingStats.innings}</td>
-                  <td>{player.bowlingStats.wickets}</td>
-                  <td>{player.bowlingStats.overs.toFixed(1)}</td>
-                  <td>{player.bowlingStats.runsConceded}</td>
-                  <td>{player.bowlingStats.average}</td>
-                  <td><strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{player.bowlingStats.economy}</strong></td>
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Innings</th>
+                  <th>Wickets</th>
+                  <th>Overs</th>
+                  <th>Runs</th>
+                  <th>Average</th>
+                  <th>Economy</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {bowlers.map((player, index) => (
+                  <tr key={player._id} style={{
+                    background: index < 3 ? 'rgba(253, 187, 45, 0.1)' : 'transparent'
+                  }}>
+                    <td>
+                      <strong style={{
+                        fontSize: '1.2rem',
+                        color: index === 0 ? '#fdbb2d' : index === 1 ? '#9ca3af' : index === 2 ? '#b87333' : '#1a2a6c'
+                      }}>
+                        {index + 1}
+                      </strong>
+                    </td>
+                    <td><strong>{player.name}</strong></td>
+                    <td>{player.team?.name || 'N/A'}</td>
+                    <td>{player.bowlingStats.innings}</td>
+                    <td>{player.bowlingStats.wickets}</td>
+                    <td>{player.bowlingStats.overs.toFixed(1)}</td>
+                    <td>{player.bowlingStats.runsConceded}</td>
+                    <td>{player.bowlingStats.average}</td>
+                    <td><strong style={{ color: '#10b981', fontSize: '1.1rem' }}>{player.bowlingStats.economy}</strong></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             No bowlers statistics available yet
@@ -279,7 +286,7 @@ function TopPerformers() {
               (Ranked by Batting Avg - Economy)
             </span>
           </div>
-          {allRounders.length > 0 && (
+          {isAdmin && allRounders.length > 0 && (
             <button
               onClick={exportAllRounders}
               className="btn btn-success"
@@ -290,51 +297,53 @@ function TopPerformers() {
           )}
         </div>
         {allRounders.length > 0 ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>Player</th>
-                <th>Team</th>
-                <th>Runs</th>
-                <th>Bat Avg</th>
-                <th>SR</th>
-                <th>Wickets</th>
-                <th>Bowl Avg</th>
-                <th>Econ</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {allRounders.map((player, index) => (
-                <tr key={player._id} style={{
-                  background: index < 3 ? 'rgba(253, 187, 45, 0.1)' : 'transparent'
-                }}>
-                  <td>
-                    <strong style={{
-                      fontSize: '1.2rem',
-                      color: index === 0 ? '#fdbb2d' : index === 1 ? '#9ca3af' : index === 2 ? '#b87333' : '#1a2a6c'
-                    }}>
-                      {index + 1}
-                    </strong>
-                  </td>
-                  <td><strong>{player.name}</strong></td>
-                  <td>{player.team?.name || 'N/A'}</td>
-                  <td>{player.battingStats.runs}</td>
-                  <td>{player.battingStats.average}</td>
-                  <td>{player.battingStats.strikeRate}</td>
-                  <td>{player.bowlingStats.wickets}</td>
-                  <td>{player.bowlingStats.average}</td>
-                  <td>{player.bowlingStats.economy}</td>
-                  <td>
-                    <strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>
-                      {(parseFloat(player.battingStats.average) - parseFloat(player.bowlingStats.economy)).toFixed(2)}
-                    </strong>
-                  </td>
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Runs</th>
+                  <th>Bat Avg</th>
+                  <th>SR</th>
+                  <th>Wickets</th>
+                  <th>Bowl Avg</th>
+                  <th>Econ</th>
+                  <th>Score</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {allRounders.map((player, index) => (
+                  <tr key={player._id} style={{
+                    background: index < 3 ? 'rgba(253, 187, 45, 0.1)' : 'transparent'
+                  }}>
+                    <td>
+                      <strong style={{
+                        fontSize: '1.2rem',
+                        color: index === 0 ? '#fdbb2d' : index === 1 ? '#9ca3af' : index === 2 ? '#b87333' : '#1a2a6c'
+                      }}>
+                        {index + 1}
+                      </strong>
+                    </td>
+                    <td><strong>{player.name}</strong></td>
+                    <td>{player.team?.name || 'N/A'}</td>
+                    <td>{player.battingStats.runs}</td>
+                    <td>{player.battingStats.average}</td>
+                    <td>{player.battingStats.strikeRate}</td>
+                    <td>{player.bowlingStats.wickets}</td>
+                    <td>{player.bowlingStats.average}</td>
+                    <td>{player.bowlingStats.economy}</td>
+                    <td>
+                      <strong style={{ color: '#b21f1f', fontSize: '1.1rem' }}>
+                        {(parseFloat(player.battingStats.average) - parseFloat(player.bowlingStats.economy)).toFixed(2)}
+                      </strong>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
             No all-rounders statistics available yet

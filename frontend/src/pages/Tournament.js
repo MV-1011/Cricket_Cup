@@ -808,65 +808,67 @@ function Tournament() {
                   </button>
                 </div>
               )}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '1.5rem' }}>
               {selectedTournament.groups?.map((group, index) => (
-                <div key={index} className="card">
+                <div key={index} className="card" style={{ overflow: 'hidden' }}>
                   <div className="card-header" style={{
                     background: 'linear-gradient(135deg, #1a2a6c, #2d4a9c)',
                     color: 'white'
                   }}>
                     {group.name}
                   </div>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Team</th>
-                        <th>P</th>
-                        <th>W</th>
-                        <th>L</th>
-                        <th>Pts</th>
-                        <th>NRR</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.standings && group.standings.length > 0 ? (
-                        group.standings
-                          .sort((a, b) => b.points - a.points || b.netRunRate - a.netRunRate)
-                          .map((standing, i) => (
-                            <tr key={i} style={{
-                              background: i < 2 ? 'rgba(16, 185, 129, 0.1)' : 'transparent'
-                            }}>
-                              <td><strong>{i + 1}</strong></td>
-                              <td>{getTeamName(standing.team?._id || standing.team)}</td>
-                              <td>{standing.played}</td>
-                              <td style={{ color: '#10b981', fontWeight: '600' }}>{standing.won}</td>
-                              <td style={{ color: '#dc3545', fontWeight: '600' }}>{standing.lost}</td>
-                              <td><strong>{standing.points}</strong></td>
-                              <td>{standing.netRunRate?.toFixed(2) || '0.00'}</td>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="table" style={{ minWidth: '350px', fontSize: '0.9rem' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '30px' }}>#</th>
+                          <th style={{ padding: '0.5rem 0.4rem', minWidth: '100px' }}>Team</th>
+                          <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '35px' }}>P</th>
+                          <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '35px' }}>W</th>
+                          <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '35px' }}>L</th>
+                          <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center', width: '40px' }}>Pts</th>
+                          <th style={{ padding: '0.5rem 0.4rem', textAlign: 'right', width: '65px' }}>NRR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.standings && group.standings.length > 0 ? (
+                          group.standings
+                            .sort((a, b) => b.points - a.points || b.netRunRate - a.netRunRate)
+                            .map((standing, i) => (
+                              <tr key={i} style={{
+                                background: i < 2 ? 'rgba(16, 185, 129, 0.1)' : 'transparent'
+                              }}>
+                                <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}><strong>{i + 1}</strong></td>
+                                <td style={{ padding: '0.5rem 0.4rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={getTeamName(standing.team?._id || standing.team)}>{getTeamName(standing.team?._id || standing.team)}</td>
+                                <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>{standing.played}</td>
+                                <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center', color: '#10b981', fontWeight: '600' }}>{standing.won}</td>
+                                <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center', color: '#dc3545', fontWeight: '600' }}>{standing.lost}</td>
+                                <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}><strong>{standing.points}</strong></td>
+                                <td style={{ padding: '0.5rem 0.4rem', textAlign: 'right', fontFamily: 'monospace', fontSize: '0.85rem' }}>{standing.netRunRate >= 0 ? '+' : ''}{standing.netRunRate?.toFixed(2) || '0.00'}</td>
+                              </tr>
+                            ))
+                        ) : group.teams && group.teams.length > 0 ? (
+                          group.teams.map((team, i) => (
+                            <tr key={i}>
+                              <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}><strong>{i + 1}</strong></td>
+                              <td style={{ padding: '0.5rem 0.4rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={team?.name || getTeamName(team?._id || team)}>{team?.name || getTeamName(team?._id || team)}</td>
+                              <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>0</td>
+                              <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center', color: '#10b981', fontWeight: '600' }}>0</td>
+                              <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center', color: '#dc3545', fontWeight: '600' }}>0</td>
+                              <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}><strong>0</strong></td>
+                              <td style={{ padding: '0.5rem 0.4rem', textAlign: 'right', fontFamily: 'monospace', fontSize: '0.85rem' }}>+0.00</td>
                             </tr>
                           ))
-                      ) : group.teams && group.teams.length > 0 ? (
-                        group.teams.map((team, i) => (
-                          <tr key={i}>
-                            <td><strong>{i + 1}</strong></td>
-                            <td>{team?.name || getTeamName(team?._id || team)}</td>
-                            <td>0</td>
-                            <td style={{ color: '#10b981', fontWeight: '600' }}>0</td>
-                            <td style={{ color: '#dc3545', fontWeight: '600' }}>0</td>
-                            <td><strong>0</strong></td>
-                            <td>0.00</td>
+                        ) : (
+                          <tr>
+                            <td colSpan="7" style={{ textAlign: 'center', color: '#9ca3af', padding: '1rem' }}>
+                              No teams in this group
+                            </td>
                           </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="7" style={{ textAlign: 'center', color: '#9ca3af' }}>
-                            No teams in this group
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))}
               {(!selectedTournament.groups || selectedTournament.groups.length === 0) && (

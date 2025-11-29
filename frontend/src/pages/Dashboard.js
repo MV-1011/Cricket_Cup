@@ -38,7 +38,7 @@ function Dashboard() {
       setLiveMatches(liveRes.data);
 
       const upcoming = matchesRes.data.filter(m => m.status === 'scheduled');
-      setUpcomingMatches(upcoming.slice(0, 5));
+      setUpcomingMatches(upcoming);
 
       setStats({
         totalTeams: teamsRes.data.length,
@@ -54,18 +54,66 @@ function Dashboard() {
     <div className="container">
       <h1 style={{ color: 'white', marginBottom: '2rem' }}>Tournament Dashboard</h1>
 
-      <div className="dashboard-grid">
-        <div className="stat-card">
-          <h3>{stats.totalTeams}</h3>
-          <p>Total Teams</p>
+      <div className="stats-grid">
+        <div className="stat-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem'
+            }}>
+              👥
+            </div>
+            <div>
+              <div className="stat-label">Total Teams</div>
+              <div className="stat-value" style={{ color: '#3b82f6' }}>{stats.totalTeams}</div>
+            </div>
+          </div>
         </div>
-        <div className="stat-card">
-          <h3>{stats.totalMatches}</h3>
-          <p>Total Matches</p>
+        <div className="stat-card" style={{ borderLeft: '4px solid #10b981' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem'
+            }}>
+              🏏
+            </div>
+            <div>
+              <div className="stat-label">Total Matches</div>
+              <div className="stat-value" style={{ color: '#10b981' }}>{stats.totalMatches}</div>
+            </div>
+          </div>
         </div>
-        <div className="stat-card">
-          <h3>{stats.liveMatches}</h3>
-          <p>Live Matches</p>
+        <div className="stat-card" style={{ borderLeft: '4px solid #ef4444' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              width: '50px',
+              height: '50px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem'
+            }}>
+              🔴
+            </div>
+            <div>
+              <div className="stat-label">Live Matches</div>
+              <div className="stat-value" style={{ color: '#ef4444' }}>{stats.liveMatches}</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -104,36 +152,47 @@ function Dashboard() {
       )}
 
       <div className="card">
-        <div className="card-header">Upcoming Matches</div>
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Upcoming Matches</span>
+          {upcomingMatches.length > 0 && (
+            <span style={{ fontSize: '0.85rem', fontWeight: 'normal', color: '#6b7280' }}>
+              {upcomingMatches.length} match{upcomingMatches.length !== 1 ? 'es' : ''}
+            </span>
+          )}
+        </div>
         {upcomingMatches.length > 0 ? (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Match #</th>
-                <th>Teams</th>
-                <th>Venue</th>
-                <th>Date</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {upcomingMatches.map(match => (
-                <tr key={match._id}>
-                  <td>{match.matchNumber}</td>
-                  <td>{match.team1?.name || 'Unknown'} vs {match.team2?.name || 'Unknown'}</td>
-                  <td>{match.venue}</td>
-                  <td>{new Date(match.date).toLocaleDateString()}</td>
-                  <td>
-                    <Link to={`/match/${match._id}`}>
-                      <button className="btn btn-primary">View</button>
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead style={{ position: 'sticky', top: 0, background: '#f8fafc', zIndex: 1 }}>
+                  <tr>
+                    <th>Match #</th>
+                    <th>Teams</th>
+                    <th>Venue</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {upcomingMatches.map(match => (
+                    <tr key={match._id}>
+                      <td>{match.matchNumber}</td>
+                      <td>{match.team1?.name || 'Unknown'} vs {match.team2?.name || 'Unknown'}</td>
+                      <td>{match.venue || '-'}</td>
+                      <td>{new Date(match.date).toLocaleDateString()}</td>
+                      <td>
+                        <Link to={`/match/${match._id}`}>
+                          <button className="btn btn-primary">View</button>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
-          <p>No upcoming matches</p>
+          <p style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>No upcoming matches</p>
         )}
       </div>
     </div>
