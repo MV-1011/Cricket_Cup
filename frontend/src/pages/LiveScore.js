@@ -71,16 +71,33 @@ function LiveScore() {
   }, [striker, battingPair, showPairSelection]);
 
   // Restore saved match state on load (batting pair, striker, bowler, pair start over)
+  // Only runs once when match data is first loaded
   useEffect(() => {
     if (match && match.status === 'live') {
-      // Check if there's a saved batting pair
-      if (match.currentBattingPair && match.currentBattingPair.player1 && match.currentBattingPair.player2) {
-        // Restore batting pair
+      const currentInnings = match.innings[match.currentInnings - 1];
+      const totalBalls = currentInnings ? currentInnings.balls : 0;
+      const currentOver = currentInnings ? Math.floor(totalBalls / 4) : 0;
+
+      // Check if there's a saved batting pair AND it's still valid (within 2 overs)
+      const hasSavedPair = match.currentBattingPair &&
+                           match.currentBattingPair.player1 &&
+                           match.currentBattingPair.player2;
+
+      // Check if the saved pair's 2 overs are complete
+      const savedPairStartOver = match.pairStartOver || 0;
+      const pairOversComplete = hasSavedPair && (currentOver - savedPairStartOver >= 2);
+
+      // Fresh match start - no balls bowled yet, need to select pair
+      const isFreshStart = totalBalls === 0;
+
+      if (hasSavedPair && !pairOversComplete && !isFreshStart) {
+        // Restore batting pair - it's still valid and match has started
         setBattingPair({
           player1: match.currentBattingPair.player1._id || match.currentBattingPair.player1,
           player2: match.currentBattingPair.player2._id || match.currentBattingPair.player2
         });
-        setShowPairSelection(false); // Hide pair selection since we have a pair
+        setShowPairSelection(false);
+        setPairStartOver(savedPairStartOver);
 
         // Restore striker
         if (match.currentStriker) {
@@ -88,32 +105,30 @@ function LiveScore() {
           setStriker(strikerId);
           setCurrentBatsman(strikerId);
         }
+
+        // Restore bowler only if one was saved
+        if (match.currentBowler) {
+          setCurrentBowler(match.currentBowler._id || match.currentBowler);
+        }
       } else {
-        // No batting pair set - show pair selection for scorer to choose
+        // No valid batting pair - show pair selection for scorer to choose
+        // This happens when: no pair saved, OR pair's 2 overs are complete, OR fresh match start
         setShowPairSelection(true);
         setBattingPair({ player1: '', player2: '' });
         setStriker('');
         setCurrentBatsman('');
-      }
-
-      // Restore bowler only if one was saved
-      if (match.currentBowler) {
-        setCurrentBowler(match.currentBowler._id || match.currentBowler);
-      } else {
-        // No bowler set - keep it empty for scorer to choose
         setCurrentBowler('');
-      }
-
-      // Restore pair start over
-      if (match.pairStartOver !== undefined) {
-        setPairStartOver(match.pairStartOver);
       }
 
       console.log('Restored match state:', {
         battingPair: match.currentBattingPair,
         striker: match.currentStriker,
         bowler: match.currentBowler,
-        pairStartOver: match.pairStartOver
+        pairStartOver: match.pairStartOver,
+        currentOver,
+        totalBalls,
+        isFreshStart,
+        pairOversComplete
       });
     }
   }, [match]);
@@ -1120,7 +1135,7 @@ function LiveScore() {
                       onChange={(e) => setBattingPair({...battingPair, player1: e.target.value})}
                       style={{ color: battingPair.player1 ? 'inherit' : '#6b7280' }}
                     >
-                      <option value="" disabled>-- Select Batsman 1 --</option>
+                      <option value="">-- Select Batsman 1 --</option>
                       {battingTeamPlayers.map(player => {
                         const isCompleted = hasPlayerCompletedOvers(player._id);
                         const hasBatted = hasPlayerBatted(player._id);
@@ -1162,7 +1177,7 @@ function LiveScore() {
                       onChange={(e) => setBattingPair({...battingPair, player2: e.target.value})}
                       style={{ color: battingPair.player2 ? 'inherit' : '#6b7280' }}
                     >
-                      <option value="" disabled>-- Select Batsman 2 --</option>
+                      <option value="">-- Select Batsman 2 --</option>
                       {battingTeamPlayers.map(player => {
                         const isCompleted = hasPlayerCompletedOvers(player._id);
                         const hasBatted = hasPlayerBatted(player._id);
@@ -1320,7 +1335,7 @@ function LiveScore() {
                   }}
                   style={{ color: currentBowler ? 'inherit' : '#6b7280' }}
                 >
-                  <option value="" disabled>-- Select Bowler --</option>
+                  <option value="">-- Select Bowler --</option>
                   {availableBowlers.map(player => {
                     const oversCompleted = getBowlerOvers(player._id);
                     const oversRemaining = maxOversPerBowler - oversCompleted;

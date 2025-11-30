@@ -419,8 +419,9 @@ export const updateBallByBall = async (req, res) => {
     // Must be called on EVERY ball, not just when new entries are added
     match.markModified('innings');
 
-    // Check if innings ended
-    if (currentInnings.wickets >= 7 || currentInnings.balls >= match.maxOvers * 4) {
+    // Check if innings ended - ONLY when full 8 overs are completed
+    // Wickets do not end the innings in YYC format
+    if (currentInnings.balls >= match.maxOvers * 4) {
       if (match.currentInnings === 1) {
         // Start second innings
         match.currentInnings = 2;
@@ -437,7 +438,7 @@ export const updateBallByBall = async (req, res) => {
           bowlingScorecard: []
         });
       } else {
-        // Match ended
+        // Match ended - both innings completed their 8 overs
         match.status = 'completed';
         await calculateMatchResult(match);
       }
@@ -559,14 +560,24 @@ async function calculateMatchResult(match) {
   const innings1 = match.innings[0];
   const innings2 = match.innings[1];
 
+  // Get team names for result text
+  const team1 = await Team.findById(match.team1);
+  const team2 = await Team.findById(match.team2);
+  const team1Name = team1 ? team1.name : 'Team 1';
+  const team2Name = team2 ? team2.name : 'Team 2';
+
+  // Determine winner team name based on batting team in innings
+  const innings1TeamName = innings1.battingTeam.toString() === match.team1.toString() ? team1Name : team2Name;
+  const innings2TeamName = innings2.battingTeam.toString() === match.team1.toString() ? team1Name : team2Name;
+
   if (innings2.runs > innings1.runs) {
     match.winner = innings2.battingTeam;
-    const wicketsLeft = 8 - innings2.wickets;
-    match.resultText = `${match.winner} won by ${wicketsLeft} wickets`;
+    const runsMargin = innings2.runs - innings1.runs;
+    match.resultText = `${innings2TeamName} won by ${runsMargin} run${runsMargin !== 1 ? 's' : ''}`;
   } else if (innings1.runs > innings2.runs) {
     match.winner = innings1.battingTeam;
     const runsMargin = innings1.runs - innings2.runs;
-    match.resultText = `${match.winner} won by ${runsMargin} runs`;
+    match.resultText = `${innings1TeamName} won by ${runsMargin} run${runsMargin !== 1 ? 's' : ''}`;
   } else {
     match.resultText = 'Match tied';
   }
